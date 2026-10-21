@@ -122,6 +122,13 @@ impl Client {
                 "Chat-Modell nicht in der Modellliste gefunden. Modellnamen prüfen.",
             ));
         }
+        if !self.config.chat_model.is_empty() {
+            self.complete(vec![Message {
+                role: "user".into(),
+                content: "Antworte nur mit OK.".into(),
+            }])
+            .await?;
+        }
         Ok(models)
     }
     pub async fn complete(&self, messages: Vec<Message>) -> Result<Vec<String>> {

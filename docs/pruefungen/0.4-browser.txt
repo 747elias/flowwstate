@@ -1,0 +1,1 @@
+Browserprüfung 0.4 bestanden: Assistent mit Mock-KI, htmx-Status, sieben Formate, Drag & Drop, Pause, Volltext, Embeddings, SSE mit Quellen, Chat-Kontext/Speicheroption, Entwurf/Freigabe/Notizen, Backup/Wiederherstellung, Datenordnerwechsel, protokollierte Pfadabwehr, HTTPS mit geprüftem Zertifikat und alle neun Ansichten auf 390px.

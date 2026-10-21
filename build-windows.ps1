@@ -10,9 +10,9 @@ function Invoke-Cargo {
     if ($LASTEXITCODE -ne 0) { throw "Cargo fehlgeschlagen: $CargoArguments" }
 }
 if (-not $SkipChecks) {
-    Invoke-Cargo @('fmt', '--all', '--', '--check')
-    Invoke-Cargo @('test', '--workspace', '--locked', '--target', 'x86_64-pc-windows-msvc')
-    Invoke-Cargo @('clippy', '--workspace', '--all-targets', '--locked', '--target', 'x86_64-pc-windows-msvc', '--', '-D', 'warnings')
+    Invoke-Cargo -CargoArguments @('fmt', '--all', '--', '--check')
+    Invoke-Cargo -CargoArguments @('test', '--workspace', '--locked', '--target', 'x86_64-pc-windows-msvc')
+    Invoke-Cargo -CargoArguments @('clippy', '--workspace', '--all-targets', '--locked', '--target', 'x86_64-pc-windows-msvc', '--', '-D', 'warnings')
 }
-Invoke-Cargo @('build', '--release', '--locked', '--target', 'x86_64-pc-windows-msvc')
+Invoke-Cargo -CargoArguments @('build', '--release', '--locked', '--target', 'x86_64-pc-windows-msvc')
 Write-Host 'Fertig: target\x86_64-pc-windows-msvc\release\folder-mind.exe'

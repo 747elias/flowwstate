@@ -66,7 +66,11 @@ impl Guard {
                 return Err(Error::UnsafePath);
             };
             let name = name.to_string_lossy();
-            if name.contains(['\\', ':', '\0']) || name.ends_with(['.', ' ']) || name.is_empty() {
+            if name.contains(['\\', ':', '\0'])
+                || name.chars().any(|c| c < ' ' || "*?\"<>|".contains(c))
+                || name.ends_with(['.', ' '])
+                || name.is_empty()
+            {
                 return Err(Error::UnsafePath);
             }
             let stem = name.split('.').next().unwrap_or("").to_uppercase();
@@ -126,7 +130,7 @@ impl Guard {
         file.sync_all()?;
         drop(file);
         if path.exists() {
-            fs::remove_file(self.resolve(path.strip_prefix(&self.root).map_err(error)?)?)?;
+            self.resolve(path.strip_prefix(&self.root).map_err(error)?)?;
         }
         fs::rename(temp, path)?;
         Ok(())
@@ -137,7 +141,7 @@ impl Guard {
         let mut f = std::fs::OpenOptions::new()
             .append(true)
             .create(true)
-            .open(self.resolve(path)?)?;
+            .open(self.checked(path.as_ref())?)?;
         f.write_all(bytes)?;
         Ok(())
     }
@@ -237,18 +241,122 @@ impl Default for Config {
 }
 impl Config {
     pub fn save(&self, guard: &Guard) -> Result<()> {
+        let flat = toml::Value::try_from(self).map_err(error)?;
+        let mut groups = toml::map::Map::new();
+        for (section, keys) in [
+            ("profile", vec!["name"]),
+            ("folders", vec!["template", "levels", "naming_rules"]),
+            (
+                "ai",
+                vec![
+                    "base_url",
+                    "chat_model",
+                    "embedding_model",
+                    "api_key_ref",
+                    "cloud_consent",
+                    "temperature",
+                    "max_tokens",
+                ],
+            ),
+            (
+                "access",
+                vec![
+                    "network_enabled",
+                    "network_bind",
+                    "allowed_ips",
+                    "allowed_macs",
+                    "password_hash",
+                ],
+            ),
+            (
+                "automation",
+                vec![
+                    "auto_approve",
+                    "stable_seconds",
+                    "max_file_mb",
+                    "autostart",
+                    "work_start_hour",
+                    "work_end_hour",
+                ],
+            ),
+            ("quality", vec!["allow_free_chat"]),
+        ] {
+            let mut table = toml::map::Map::new();
+            for key in keys {
+                if let Some(value) = flat.get(key) {
+                    table.insert(
+                        if key == "stable_seconds" {
+                            "stable_file_wait_seconds"
+                        } else {
+                            key
+                        }
+                        .into(),
+                        value.clone(),
+                    );
+                }
+            }
+            if section == "access" {
+                table.insert(
+                    "bind".into(),
+                    toml::Value::Array(vec!["127.0.0.1".into(), "::1".into()]),
+                );
+            }
+            if section == "automation" {
+                table.insert("max_ai_jobs".into(), toml::Value::Integer(1));
+            }
+            if section == "quality" {
+                table.insert("require_citations".into(), toml::Value::Boolean(true));
+            }
+            groups.insert(section.into(), toml::Value::Table(table));
+        }
+        let mut paths = toml::map::Map::new();
+        paths.insert(
+            "data_dir".into(),
+            toml::Value::String(guard.root().to_string_lossy().into()),
+        );
+        groups.insert("paths".into(), toml::Value::Table(paths));
         guard.write(
             ".folder-mind/config.toml",
-            toml::to_string_pretty(self).map_err(error)?.as_bytes(),
+            toml::to_string_pretty(&groups).map_err(error)?.as_bytes(),
         )
     }
+    pub fn from_toml(text: &str) -> Result<Self> {
+        let value: toml::Value = toml::from_str(text).map_err(error)?;
+        if value.get("ai").is_none() {
+            return value.try_into().map_err(error);
+        }
+        let mut flat = toml::map::Map::new();
+        for group in [
+            "profile",
+            "folders",
+            "ai",
+            "access",
+            "automation",
+            "quality",
+        ] {
+            if let Some(table) = value.get(group).and_then(|v| v.as_table()) {
+                for (key, value) in table {
+                    flat.insert(
+                        if key == "stable_file_wait_seconds" {
+                            "stable_seconds"
+                        } else {
+                            key
+                        }
+                        .into(),
+                        value.clone(),
+                    );
+                }
+            }
+        }
+        toml::Value::Table(flat).try_into().map_err(error)
+    }
     pub fn load(guard: &Guard) -> Result<Self> {
-        toml::from_str(&fs::read_to_string(
+        Self::from_toml(&fs::read_to_string(
             guard.resolve(".folder-mind/config.toml")?,
         )?)
-        .map_err(error)
     }
 }
+
 pub fn initialize(guard: &Guard, config: &Config) -> Result<()> {
     for dir in [
         "unterlagen",
@@ -360,5 +468,134 @@ mod tests {
             .unwrap();
         assert!(status.success());
         assert!(g.write("junction/escape", b"x").is_err());
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DocumentStatus {
+    Found,
+    WaitingStable,
+    Checked,
+    Extracted,
+    DraftCreated,
+    WaitingApproval,
+    Approved,
+    Indexed,
+    Failed,
+}
+impl DocumentStatus {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "gefunden" => Ok(Self::Found),
+            "wartet_auf_stabile_datei" => Ok(Self::WaitingStable),
+            "geprüft" => Ok(Self::Checked),
+            "extrahiert" => Ok(Self::Extracted),
+            "entwurf_erstellt" => Ok(Self::DraftCreated),
+            "wartet_auf_freigabe" => Ok(Self::WaitingApproval),
+            "freigegeben" => Ok(Self::Approved),
+            "indiziert" => Ok(Self::Indexed),
+            "fehlgeschlagen" => Ok(Self::Failed),
+            _ => Err(error("Unbekannter Verarbeitungsstatus")),
+        }
+    }
+    pub fn can_transition(self, next: Self) -> bool {
+        use DocumentStatus::*;
+        self == next
+            || next == Failed
+            || matches!(
+                (self, next),
+                (Found, WaitingStable | Checked)
+                    | (WaitingStable, Checked)
+                    | (Checked, Extracted)
+                    | (Extracted, DraftCreated | Indexed)
+                    | (DraftCreated, WaitingApproval)
+                    | (WaitingApproval, Approved)
+                    | (Approved, Indexed)
+                    | (
+                        Indexed | Failed | Approved | WaitingApproval,
+                        Checked | Found | WaitingStable
+                    )
+            )
+    }
+}
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+    #[test]
+    fn legal_transitions_and_retry() {
+        use DocumentStatus::*;
+        for (a, b) in [
+            (Found, WaitingStable),
+            (WaitingStable, Checked),
+            (Checked, Extracted),
+            (Extracted, DraftCreated),
+            (DraftCreated, WaitingApproval),
+            (WaitingApproval, Approved),
+            (Approved, Indexed),
+            (Failed, Checked),
+            (Indexed, Checked),
+        ] {
+            assert!(a.can_transition(b));
+        }
+        assert!(!Found.can_transition(Approved));
+        assert!(!Extracted.can_transition(Approved));
+        assert!(DocumentStatus::parse("beliebig").is_err());
+    }
+}
+#[cfg(test)]
+mod guard_more_tests {
+    use super::*;
+    #[test]
+    fn windows_and_network_path_attacks() {
+        let t = tempfile::tempdir().unwrap();
+        let g = Guard::new(t.path()).unwrap();
+        for p in [
+            "\\\\server\\share\\outside",
+            "\\\\?\\C:\\outside",
+            "C:/Windows/file",
+            "D:relative",
+            "a/../b",
+            "CON",
+            "aux.txt",
+            "LPT9.log",
+            "a/NUL",
+            "a/file:stream",
+            "a/*.txt",
+            "a/<x>",
+            "a/with\nnewline",
+            "a/with\rreturn",
+        ] {
+            assert!(g.write(p, b"bad").is_err(), "{p:?}");
+        }
+        assert!(g.write("", b"bad").is_err());
+        assert!(g.move_path("", "x").is_err());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn dangling_and_internal_symlinks() {
+        let t = tempfile::tempdir().unwrap();
+        let g = Guard::new(t.path()).unwrap();
+        g.mkdir("inside").unwrap();
+        std::os::unix::fs::symlink(t.path().join("inside"), t.path().join("alias")).unwrap();
+        assert!(g.mkdir("alias/child").is_err());
+        std::os::unix::fs::symlink(t.path().join("missing"), t.path().join("dangling")).unwrap();
+        assert!(g.write("dangling", b"bad").is_err());
+    }
+}
+
+#[cfg(test)]
+mod replace_tests {
+    use super::*;
+    #[test]
+    fn saving_replaces_only_the_destination() {
+        let t = tempfile::tempdir().unwrap();
+        let g = Guard::new(t.path()).unwrap();
+        g.write("notes.md", b"Erster Stand").unwrap();
+        g.write("notes.md", b"Zweiter Stand").unwrap();
+        assert_eq!(
+            fs::read(g.resolve("notes.md").unwrap()).unwrap(),
+            b"Zweiter Stand"
+        );
+        assert_eq!(fs::read_dir(t.path()).unwrap().count(), 1);
     }
 }

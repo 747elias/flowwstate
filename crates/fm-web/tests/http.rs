@@ -359,3 +359,175 @@ async fn remote_whitelist_login_and_local_administration() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn cited_chat_draft_approval_and_restore() {
+    use axum::{Json, routing::post};
+    async fn completion(Json(value): Json<serde_json::Value>) -> axum::response::Response {
+        let source = value["messages"].as_array().unwrap().last().unwrap()["content"]
+            .as_str()
+            .unwrap();
+        let id = source
+            .split("\"id\":\"")
+            .nth(1)
+            .unwrap()
+            .split('"')
+            .next()
+            .unwrap();
+        let content = if value["model"] == "bad" {
+            "Antwort ohne Beleg".to_string()
+        } else {
+            format!(
+                "# Wissen\n\n## Zusammenfassung\nEthernet verbindet Computer. [{id}]\n\n## Wichtige Begriffe\nEthernet\n\n## Zusammenhänge und Beispiele\nLokales Netzwerk\n\n## Typische Prüfungsfragen\nWas verbindet Ethernet?\n\n## Offene Punkte\nKeine.\n\n## Quellen\n[{id}]"
+            )
+        };
+        let data = serde_json::json!({"choices":[{"delta":{"content":content}}]});
+        (
+            [("content-type", "text/event-stream")],
+            format!("data: {data}\n\ndata: [DONE]\n\n"),
+        )
+            .into_response()
+    }
+    use axum::response::IntoResponse;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            axum::Router::new().route("/v1/chat/completions", post(completion)),
+        )
+        .await
+        .unwrap()
+    });
+    let t = tempfile::tempdir().unwrap();
+    let data = t.path().join("data");
+    std::fs::create_dir(&data).unwrap();
+    let s = AppState::new(t.path().join("pointer")).unwrap();
+    let csrf = s.csrf.clone();
+    let r = router(s.clone());
+    request(
+        r.clone(),
+        "POST",
+        "/api/setup",
+        &csrf,
+        serde_json::json!({"path":data,"config":{"stable_seconds":0}}),
+    )
+    .await;
+    let lib = s.lib().unwrap();
+    let chapter = "unterlagen/1-lehrjahr/modul-117-netzwerk/kapitel-01-grundlagen";
+    let original = format!("{chapter}/ethernet.txt");
+    lib.guard
+        .upload(
+            &original,
+            b"Ethernet verbindet Computer im lokalen Netzwerk.",
+        )
+        .unwrap();
+    lib.scan(false).unwrap();
+    {
+        let mut c = lib.config.write().unwrap();
+        c.base_url = format!("http://{addr}/v1");
+        c.chat_model = "mock".into();
+        c.save(&lib.guard).unwrap();
+    }
+    let response = r
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/chat")
+                .extension(axum::extract::ConnectInfo(
+                    "127.0.0.1:50000".parse::<std::net::SocketAddr>().unwrap(),
+                ))
+                .header("host", "127.0.0.1:8484")
+                .header("content-type", "application/json")
+                .header("x-csrf-token", &csrf)
+                .body(Body::from(
+                    serde_json::json!({"question":"Ethernet","scope":chapter,"save":true})
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), 1_000_000).await.unwrap();
+    let answer = String::from_utf8_lossy(&body);
+    assert!(answer.contains("event: sources"));
+    assert!(answer.contains(&lib.catalog.chunks().unwrap()[0].id));
+    assert_eq!(
+        lib.catalog.rows("SELECT role FROM messages").unwrap().len(),
+        2
+    );
+    assert_eq!(
+        request(
+            r.clone(),
+            "POST",
+            "/api/chapter/draft",
+            &csrf,
+            serde_json::json!({"path":chapter})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(
+            r.clone(),
+            "POST",
+            "/api/chapter/approve",
+            &csrf,
+            serde_json::json!({"path":chapter})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let (_, backup) = request(
+        r.clone(),
+        "POST",
+        "/api/backup",
+        &csrf,
+        serde_json::json!({}),
+    )
+    .await;
+    let name = backup["name"].as_str().unwrap();
+    lib.guard.write(&original, b"Ein anderer Stand.").unwrap();
+    let (_, preview) = request(
+        r.clone(),
+        "POST",
+        "/api/backup/preview",
+        &csrf,
+        serde_json::json!({"name":name}),
+    )
+    .await;
+    assert_eq!(
+        request(
+            r.clone(),
+            "POST",
+            "/api/backup/restore",
+            &csrf,
+            serde_json::json!({"name":name,"hash":preview["hash"],"confirmed":true})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        std::fs::read(lib.guard.resolve(&original).unwrap()).unwrap(),
+        b"Ethernet verbindet Computer im lokalen Netzwerk."
+    );
+    {
+        lib.config.write().unwrap().chat_model = "bad".into();
+    }
+    let (status, result) = request(
+        r,
+        "POST",
+        "/api/chapter/draft",
+        &csrf,
+        serde_json::json!({"path":chapter}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(result["error"].as_str().unwrap().contains("Quellenbeleg"));
+    server.abort();
+}

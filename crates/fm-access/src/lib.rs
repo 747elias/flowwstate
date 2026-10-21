@@ -228,3 +228,92 @@ mod tests {
         assert_eq!(a, b);
     }
 }
+
+#[cfg(windows)]
+pub fn local_hour() -> u8 {
+    unsafe { windows::Win32::System::SystemInformation::GetLocalTime().wHour as u8 }
+}
+#[cfg(not(windows))]
+pub fn local_hour() -> u8 {
+    ((fm_core::now() / 3600) % 24) as u8
+}
+pub fn in_time_window(start: u8, end: u8, hour: u8) -> bool {
+    if start == end {
+        return true;
+    }
+    if start < end {
+        hour >= start && hour < end
+    } else {
+        hour >= start || hour < end
+    }
+}
+#[cfg(windows)]
+pub fn set_autostart(enabled: bool) -> Result<()> {
+    use windows::{
+        Win32::System::Registry::*,
+        core::{PCWSTR, w},
+    };
+    let mut key = HKEY::default();
+    unsafe {
+        RegCreateKeyExW(
+            HKEY_CURRENT_USER,
+            w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
+            None,
+            PCWSTR::null(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_SET_VALUE,
+            None,
+            &mut key,
+            None,
+        )
+        .ok()
+        .map_err(|_| error("Autostart-Schlüssel konnte nicht geöffnet werden"))?;
+        let result = if enabled {
+            let exe = std::env::current_exe()?;
+            let value = format!("\"{}\"", exe.display())
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .flat_map(u16::to_le_bytes)
+                .collect::<Vec<_>>();
+            RegSetValueExW(key, w!("FolderMind"), None, REG_SZ, Some(&value))
+        } else {
+            let r = RegDeleteValueW(key, w!("FolderMind"));
+            if r.0 == 2 {
+                windows::Win32::Foundation::WIN32_ERROR(0)
+            } else {
+                r
+            }
+        };
+        let _ = RegCloseKey(key);
+        result
+            .ok()
+            .map_err(|_| error("Autostart konnte nicht geändert werden"))
+    }
+}
+#[cfg(not(windows))]
+pub fn set_autostart(enabled: bool) -> Result<()> {
+    if enabled {
+        Err(error("Autostart ist im Windows-Build verfügbar"))
+    } else {
+        Ok(())
+    }
+}
+#[cfg(test)]
+mod time_tests {
+    #[test]
+    fn overnight_window() {
+        assert!(super::in_time_window(22, 6, 23));
+        assert!(super::in_time_window(22, 6, 2));
+        assert!(!super::in_time_window(22, 6, 12));
+        assert!(super::in_time_window(0, 24, 23));
+    }
+}
+
+pub fn certificate_fingerprint(guard: &Guard) -> Result<String> {
+    let bytes = std::fs::read(guard.resolve(".folder-mind/tls-cert.pem")?)?;
+    let cert = rustls_pemfile::certs(&mut std::io::Cursor::new(bytes))
+        .next()
+        .ok_or_else(|| error("Zertifikat enthält keine gültigen Zertifikatsdaten"))?
+        .map_err(error)?;
+    Ok(fm_core::hash(cert.as_ref()))
+}

@@ -46,6 +46,36 @@ pub fn write_draft(
     model: &str,
 ) -> Result<String> {
     let used = validate_citations(body, sources)?;
+    let mut normalized = body.to_string();
+    if !normalized.trim_start().starts_with("# ") {
+        normalized = format!(
+            "# {}\n\n{normalized}",
+            chapter.rsplit('/').next().unwrap_or(chapter)
+        );
+    }
+    for heading in [
+        "Zusammenfassung",
+        "Wichtige Begriffe",
+        "Zusammenhänge und Beispiele",
+        "Typische Prüfungsfragen",
+        "Offene Punkte",
+        "Quellen",
+    ] {
+        if !normalized
+            .lines()
+            .any(|l| l.trim() == format!("## {heading}"))
+        {
+            normalized += &format!("\n\n## {heading}\n\n");
+            if heading == "Quellen" {
+                for c in sources.iter().filter(|c| used.contains(&c.id)) {
+                    normalized += &format!("- {} · {} [{}]\n", c.path, c.location, c.id);
+                }
+            } else {
+                normalized += "Keine weiteren belegten Angaben vorhanden.\n";
+            }
+        }
+    }
+    let body = normalized.as_str();
     let (generated, _, _) = chapter_files(chapter)?;
     if let Some(p) = Path::new(&generated).parent() {
         guard.mkdir(p)?;

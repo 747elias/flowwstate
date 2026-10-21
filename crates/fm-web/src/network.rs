@@ -131,6 +131,8 @@ pub async fn security(State(s): State<AppState>, request: Request, next: Next) -
         "/app.js",
         "/style.css",
         "/htmx.min.js",
+        "/favicon.svg",
+        "/third-party.txt",
     ]
     .contains(&path);
     if !public && !authenticated(&s, &request, ip) {
@@ -154,6 +156,8 @@ pub async fn security(State(s): State<AppState>, request: Request, next: Next) -
             "/app.js",
             "/style.css",
             "/htmx.min.js",
+            "/favicon.svg",
+            "/third-party.txt",
         ]
         .contains(&path)
     {
@@ -229,10 +233,7 @@ async fn status(State(s): State<AppState>) -> ApiResult<Json<Value>> {
     let l = s.lib()?;
     let c = l.config.read().map_err(error)?.clone();
     let thumbprint = if l.guard.resolve(".folder-mind/tls-cert.pem")?.exists() {
-        fm_core::hash(
-            &std::fs::read(l.guard.resolve(".folder-mind/tls-cert.pem")?)
-                .map_err(fm_core::Error::from)?,
-        )
+        fm_access::certificate_fingerprint(&l.guard)?
     } else {
         String::new()
     };
@@ -272,6 +273,12 @@ async fn allow_device(State(s): State<AppState>, Json(p): Json<Allow>) -> ApiRes
 pub async fn serve(s: AppState) {
     let mut active: Option<(String, axum_server::Handle)> = None;
     loop {
+        if s.shutdown.load(Ordering::Relaxed) {
+            if let Some((_, handle)) = active.take() {
+                handle.graceful_shutdown(Some(Duration::from_secs(2)));
+            }
+            break;
+        }
         let wanted = s
             .lib()
             .ok()

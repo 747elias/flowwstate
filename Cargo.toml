@@ -2,7 +2,7 @@
 members = ["crates/*"]
 resolver = "2"
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 license = "MIT"
 rust-version = "1.88"
@@ -16,6 +16,7 @@ tantivy = "=0.25.0"
 notify = "=8.2.0"
 keyring = { version = "=3.6.3", features = ["windows-native"] }
 rcgen = "=0.14.5"
+rustls-pemfile = "=2.2.0"
 rustls = { version = "=0.23.35", default-features = false, features = ["ring", "std", "tls12"] }
 axum-server = { version = "=0.7.3", features = ["tls-rustls-no-provider"] }
 argon2 = "=0.5.3"
@@ -39,7 +40,7 @@ quick-xml = "=0.38.3"
 calamine = "=0.31.0"
 url = "=2.5.7"
 tempfile = "=3.23.0"
-windows = { version = "=0.61.3", features = ["Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_System_Registry", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_Foundation", "Media_Ocr", "Graphics_Imaging", "Storage", "Storage_Streams", "Foundation", "Globalization", "Data_Pdf"] }
+windows = { version = "=0.61.3", features = ["Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_System_Registry", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_Foundation", "Media_Ocr", "Graphics_Imaging", "Storage", "Storage_Streams", "Foundation", "Globalization", "Data_Pdf", "Win32_System_WinRT", "Win32_System_SystemInformation", "Win32_Security"] }
 tray-icon = "=0.21.2"
 [profile.release]
 strip = true

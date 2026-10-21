@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 [dependencies]
+rustls-pemfile.workspace = true
 uuid.workspace = true
 ipnet.workspace = true
 argon2.workspace = true

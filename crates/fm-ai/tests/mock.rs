@@ -107,3 +107,28 @@ fn cloud_consent_and_url() {
     };
     assert!(Client::new(c, String::new()).is_err());
 }
+
+#[tokio::test]
+async fn api_key_echo_is_redacted() {
+    async fn echo() -> axum::response::Response {
+        ([("content-type", "text/event-stream")], "data: {\"choices\":[{\"delta\":{\"content\":\"s3c\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"r3t\"}}]}\n\ndata: [DONE]\n\n").into_response()
+    }
+    let app = Router::new().route("/v1/chat/completions", post(echo));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let config = Config {
+        base_url: format!("http://{addr}/v1"),
+        chat_model: "echo".into(),
+        ..Config::default()
+    };
+    let answer = Client::new(config, "s3cr3t".into())
+        .unwrap()
+        .complete(vec![])
+        .await
+        .unwrap()
+        .concat();
+    assert!(!answer.contains("s3cr3t"));
+    assert_eq!(answer, "[API-Key entfernt]");
+    task.abort();
+}

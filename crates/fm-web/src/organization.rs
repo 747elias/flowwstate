@@ -176,6 +176,9 @@ pub async fn background(s: AppState) {
     let mut watcher = None;
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     loop {
+        if s.shutdown.load(Ordering::Relaxed) {
+            break;
+        }
         if let Ok(l) = s.lib() {
             if observed != l.guard.root() {
                 observed = l.guard.root().to_path_buf();
@@ -185,7 +188,14 @@ pub async fn background(s: AppState) {
                 )
                 .ok();
             }
-            if !s.paused.load(Ordering::Relaxed) {
+            if !s.paused.load(Ordering::Relaxed) && {
+                let c = l.config.read().map(|c| c.clone()).unwrap_or_default();
+                fm_access::in_time_window(
+                    c.work_start_hour,
+                    c.work_end_hour,
+                    fm_access::local_hour(),
+                )
+            } {
                 let lib = l.clone();
                 if let Err(e) = tokio::task::spawn_blocking(move || lib.scan(false))
                     .await

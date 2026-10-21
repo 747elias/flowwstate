@@ -84,3 +84,72 @@ mod tests {
         assert!(i.search("Quantenbanane", 5).unwrap().is_empty());
     }
 }
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct VectorEntry {
+    pub id: String,
+    pub hash: String,
+    pub vector: Vec<f32>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Vectors {
+    pub model: String,
+    pub base_url: String,
+    pub entries: Vec<VectorEntry>,
+}
+impl Vectors {
+    pub fn load(guard: &Guard) -> Result<Self> {
+        serde_json::from_slice(&std::fs::read(
+            guard.resolve(".folder-mind/embeddings.json")?,
+        )?)
+        .map_err(error)
+    }
+    pub fn save(&self, guard: &Guard) -> Result<()> {
+        guard.write(
+            ".folder-mind/embeddings.json",
+            &serde_json::to_vec(self).map_err(error)?,
+        )
+    }
+    pub fn search(&self, query: &[f32], chunks: &[Chunk], limit: usize) -> Vec<String> {
+        let mut scored = self
+            .entries
+            .iter()
+            .filter(|e| chunks.iter().any(|c| c.id == e.id && c.hash == e.hash))
+            .filter_map(|e| {
+                cosine(query, &e.vector)
+                    .filter(|s| *s > 0.35)
+                    .map(|s| (s, e.id.clone()))
+            })
+            .collect::<Vec<_>>();
+        scored.sort_by(|a, b| b.0.total_cmp(&a.0));
+        scored.into_iter().take(limit).map(|(_, id)| id).collect()
+    }
+}
+pub fn cosine(a: &[f32], b: &[f32]) -> Option<f32> {
+    if a.len() != b.len() || a.is_empty() || a.iter().chain(b).any(|v| !v.is_finite()) {
+        return None;
+    }
+    let dot: f64 = a
+        .iter()
+        .zip(b)
+        .map(|(a, b)| (*a as f64) * (*b as f64))
+        .sum();
+    let an: f64 = a.iter().map(|v| (*v as f64).powi(2)).sum();
+    let bn: f64 = b.iter().map(|v| (*v as f64).powi(2)).sum();
+    let norm = (an * bn).sqrt();
+    if norm == 0.0 {
+        None
+    } else {
+        Some((dot / norm) as f32)
+    }
+}
+#[cfg(test)]
+mod semantic_tests {
+    #[test]
+    fn vector_similarity() {
+        assert!((super::cosine(&[1.0, 0.0], &[1.0, 0.0]).unwrap() - 1.0).abs() < 0.001);
+        assert_eq!(super::cosine(&[1.0, 0.0], &[0.0, 1.0]), Some(0.0));
+        assert!(super::cosine(&[0.0], &[0.0]).is_none());
+        assert!(super::cosine(&[1.0], &[1.0, 2.0]).is_none());
+    }
+}

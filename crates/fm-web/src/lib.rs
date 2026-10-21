@@ -1,11 +1,12 @@
 mod ai;
+mod backup;
 pub mod network;
 pub mod organization;
+mod semantic;
 use axum::{
     Json, Router,
-    body::Body,
     extract::{ConnectInfo, Query, Request, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
@@ -34,6 +35,8 @@ pub struct AppState {
     pub sessions: network::Sessions,
     pub attempts: network::Attempts,
     pub network_error: Arc<RwLock<String>>,
+    pub ai_jobs: Arc<tokio::sync::Semaphore>,
+    pub shutdown: Arc<AtomicBool>,
 }
 pub struct Library {
     pub guard: Guard,
@@ -118,12 +121,14 @@ impl Library {
                 path: relative.clone(),
                 hash,
                 size: bytes.len() as u64,
-                status: "gefunden".into(),
+                status: "geprüft".into(),
                 error: String::new(),
             };
             self.catalog.record(&d, &[])?;
             match fm_extract::extract(&relative, &bytes) {
                 Ok(chunks) => {
+                    d.status = "extrahiert".into();
+                    self.catalog.record(&d, &chunks)?;
                     self.guard.write(
                         format!("extrakte/{}.json", fm_core::hash(relative.as_bytes())),
                         &serde_json::to_vec_pretty(&chunks).map_err(error)?,
@@ -182,6 +187,8 @@ impl AppState {
             sessions: Arc::new(Mutex::new(Default::default())),
             attempts: Arc::new(Mutex::new(Default::default())),
             network_error: Arc::new(RwLock::new(String::new())),
+            ai_jobs: Arc::new(tokio::sync::Semaphore::new(1)),
+            shutdown: Arc::new(AtomicBool::new(false)),
         })
     }
     pub fn lib(&self) -> Result<Arc<Library>> {
@@ -220,6 +227,8 @@ pub fn router(state: AppState) -> Router {
         .merge(ai::routes())
         .merge(network::routes())
         .merge(organization::routes())
+        .merge(backup::routes())
+        .merge(semantic::routes())
         .route("/api/state", get(state_info))
         .route("/api/setup", post(setup))
         .route("/api/browse", get(browse))
@@ -238,7 +247,7 @@ pub fn router(state: AppState) -> Router {
 }
 async fn state_info(State(s): State<AppState>, request: Request) -> Json<Value> {
     Json(
-        json!({"configured":s.lib().is_ok(),"csrf":s.csrf,"version":env!("CARGO_PKG_VERSION"),"login_required":!network::authenticated(&s,&request,peer(&request))}),
+        json!({"product":"folder-mind","configured":s.lib().is_ok(),"csrf":s.csrf,"version":env!("CARGO_PKG_VERSION"),"login_required":!network::authenticated(&s,&request,peer(&request)),"is_local":peer(&request).is_loopback(),"allow_free_chat":s.lib().ok().and_then(|l|l.config.read().ok().map(|c|c.allow_free_chat)).unwrap_or(true)}),
     )
 }
 #[derive(Deserialize)]
@@ -250,6 +259,7 @@ struct Setup {
     template: String,
     config: Option<Config>,
     api_key: Option<String>,
+    password: Option<String>,
 }
 fn default_template() -> String {
     "lehre-informatik".into()
@@ -264,6 +274,20 @@ async fn setup(State(s): State<AppState>, Json(p): Json<Setup>) -> ApiResult<Jso
         template: p.template,
         ..p.config.unwrap_or_default()
     };
+    config.levels = match config.template.as_str() {
+        "schule" => vec!["Fach".into(), "Thema".into()],
+        "frei" => vec!["Bereich".into()],
+        "lehre-allgemein" => vec!["Lehrjahr".into(), "Fach".into(), "Thema".into()],
+        _ => config.levels,
+    };
+    if let Some(password) = p.password
+        && !password.is_empty()
+    {
+        config.password_hash = fm_access::password_hash(&password)?;
+    }
+    if !config.network_enabled {
+        config.password_hash.clear();
+    }
     config.api_key_ref = format!(
         "folder-mind-{}",
         fm_core::hash(guard.root().to_string_lossy().as_bytes())
@@ -391,34 +415,82 @@ pub fn in_scope(path: &str, scope: &str) -> bool {
 #[derive(Deserialize)]
 struct SourceQuery {
     id: String,
+    #[serde(default)]
+    download: bool,
 }
 async fn source(State(s): State<AppState>, Query(q): Query<SourceQuery>) -> ApiResult<Response> {
+    if q.id.len() != 64 || !q.id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(error("Ungültige Quellenkennung").into());
+    }
     let l = s.lib()?;
     let c = l
         .catalog
-        .chunks()?
-        .into_iter()
-        .find(|c| c.id == q.id)
+        .source(&q.id)?
         .ok_or_else(|| error("Quelle nicht gefunden"))?;
-    let body = std::fs::read(l.guard.resolve(&c.path)?).map_err(fm_core::Error::from)?;
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        header::CONTENT_TYPE,
-        if c.path.to_lowercase().ends_with(".pdf") {
-            "application/pdf"
-        } else {
-            "text/plain; charset=utf-8"
+    let path = l.guard.resolve(&c.path)?;
+    let body = if path.exists() {
+        Some(std::fs::read(path).map_err(fm_core::Error::from)?)
+    } else {
+        None
+    };
+    let current = body.as_ref().is_some_and(|b| fm_core::hash(b) == c.hash);
+    if current && c.path.to_lowercase().ends_with(".pdf") {
+        return Ok(([(header::CONTENT_TYPE, "application/pdf")], body.unwrap()).into_response());
+    }
+    if q.download {
+        if !current {
+            return Err(error("Das Original ist nicht mehr im damaligen Stand vorhanden. Der archivierte Extrakt bleibt sichtbar.").into());
         }
-        .parse()
-        .unwrap(),
+        let body = body.unwrap_or_default();
+        let name = Path::new(&c.path)
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let encoded = url::form_urlencoded::byte_serialize(name.as_bytes())
+            .collect::<String>()
+            .replace('+', "%20");
+        return Ok((
+            [
+                (header::CONTENT_TYPE, "application/octet-stream".to_string()),
+                (
+                    header::CONTENT_DISPOSITION,
+                    format!("attachment; filename*=UTF-8''{encoded}"),
+                ),
+            ],
+            body,
+        )
+            .into_response());
+    }
+    let esc = |text: &str| {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('\"', "&quot;")
+    };
+    let html = format!(
+        "<!doctype html><html lang=\"de\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Quelle · Folder-Mind</title><link rel=\"stylesheet\" href=\"/style.css\"></head><body><main><h1>{}</h1><p>{}</p><article class=\"card\"><pre>{}</pre></article><a href=\"/api/source?id={}&amp;download=true\" download>Original herunterladen</a><p>SHA-256: {}</p></main></body></html>",
+        esc(&c.path),
+        esc(&format!(
+            "{}{}",
+            c.location,
+            if current {
+                ""
+            } else {
+                " · Archivierter Extrakt: Original geändert oder entfernt"
+            }
+        )),
+        esc(&c.text),
+        c.id,
+        esc(&c.hash)
     );
-    Ok((headers, Body::from(body)).into_response())
+    Ok(axum::response::Html(html).into_response())
 }
+
 async fn dashboard(State(s): State<AppState>) -> ApiResult<Json<Value>> {
     let l = s.lib()?;
     let d = l.catalog.documents()?;
     Ok(Json(
-        json!({"documents":d.len(),"errors":d.iter().filter(|d|d.status=="fehlgeschlagen").count(),"pending":l.catalog.rows("SELECT path FROM knowledge_pages WHERE status='wartet_auf_freigabe'")?.len(),"path":l.guard.root(),"paused":s.paused.load(Ordering::Relaxed)}),
+        json!({"documents":d.len(),"errors":d.iter().filter(|d|d.status=="fehlgeschlagen").count(),"pending":l.catalog.rows("SELECT path FROM knowledge_pages WHERE status='wartet_auf_freigabe'")?.len(),"path":l.guard.root(),"paused":s.paused.load(Ordering::Relaxed),"recent_chats":l.catalog.rows("SELECT id,title FROM chats ORDER BY rowid DESC LIMIT 5")?,"recent_documents":l.catalog.rows("SELECT path,status FROM documents ORDER BY rowid DESC LIMIT 5")?}),
     ))
 }
 async fn asset(request: Request) -> Response {
@@ -432,6 +504,8 @@ async fn asset(request: Request) -> Response {
         let mime = match file.rsplit('.').next() {
             Some("js") => "text/javascript; charset=utf-8",
             Some("css") => "text/css; charset=utf-8",
+            Some("txt") => "text/plain; charset=utf-8",
+            Some("svg") => "image/svg+xml",
             _ => "text/html; charset=utf-8",
         };
         ([(header::CONTENT_TYPE, mime)], a.data.into_owned()).into_response()

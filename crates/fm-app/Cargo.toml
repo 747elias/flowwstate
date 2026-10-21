@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 [dependencies]
+reqwest.workspace = true
+serde_json.workspace = true
 fm-access = { path = "../fm-access" }
 rustls.workspace = true
 axum.workspace = true
@@ -17,3 +19,7 @@ tempfile.workspace = true
 [[bin]]
 name = "folder-mind"
 path = "src/main.rs"
+
+[target.'cfg(windows)'.dependencies]
+tray-icon.workspace = true
+windows.workspace = true

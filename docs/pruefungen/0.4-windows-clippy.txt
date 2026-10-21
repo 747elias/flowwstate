@@ -1,0 +1,12 @@
+    Blocking waiting for file lock on build directory
+    Checking fm-core v0.4.0 (/workspace/folder-mind/crates/fm-core)
+    Checking fm-ai v0.4.0 (/workspace/folder-mind/crates/fm-ai)
+    Checking fm-catalog v0.4.0 (/workspace/folder-mind/crates/fm-catalog)
+    Checking fm-watcher v0.4.0 (/workspace/folder-mind/crates/fm-watcher)
+    Checking fm-extract v0.4.0 (/workspace/folder-mind/crates/fm-extract)
+    Checking fm-access v0.4.0 (/workspace/folder-mind/crates/fm-access)
+    Checking fm-knowledge v0.4.0 (/workspace/folder-mind/crates/fm-knowledge)
+    Checking fm-index v0.4.0 (/workspace/folder-mind/crates/fm-index)
+    Checking fm-web v0.4.0 (/workspace/folder-mind/crates/fm-web)
+    Checking fm-app v0.4.0 (/workspace/folder-mind/crates/fm-app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.60s

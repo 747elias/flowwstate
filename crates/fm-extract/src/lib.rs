@@ -1,3 +1,5 @@
+mod ocr;
+mod office;
 use fm_core::{Chunk, Result, error};
 use std::path::Path;
 pub fn extract(path: &str, bytes: &[u8]) -> Result<Vec<Chunk>> {
@@ -7,12 +9,40 @@ pub fn extract(path: &str, bytes: &[u8]) -> Result<Vec<Chunk>> {
         .unwrap_or("")
         .to_lowercase();
     let pages: Vec<(String, String)> = match ext.as_str() {
-        "pdf" => pdf_extract::extract_text_from_mem(bytes)
-            .map_err(error)?
-            .split('\u{c}')
-            .enumerate()
-            .map(|(i, t)| (format!("S. {}", i + 1), t.to_string()))
-            .collect(),
+        "pdf" => {
+            let texts = pdf_extract::extract_text_from_mem_by_pages(bytes).map_err(|_| {
+                error("PDF kann nicht gelesen werden. Datei beschädigt oder verschlüsselt.")
+            })?;
+            if texts.iter().all(|t| t.trim().is_empty()) {
+                ocr::extract(bytes, true)?
+            } else {
+                #[cfg(windows)]
+                let recognized = if texts.iter().any(|t| t.trim().is_empty()) {
+                    ocr::extract(bytes, true)?
+                } else {
+                    Vec::new()
+                };
+                texts
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, t)| {
+                        #[cfg(windows)]
+                        if t.trim().is_empty()
+                            && let Some(page) = recognized.get(i)
+                        {
+                            return page.clone();
+                        }
+                        (format!("S. {}", i + 1), t)
+                    })
+                    .collect()
+            }
+        }
+        "png" | "jpg" | "jpeg" | "bmp" | "tif" | "tiff" => ocr::extract(bytes, false)?,
+        "docx" | "pptx" | "xlsx" => office::extract(&ext, bytes)?,
+        "csv" => vec![(
+            "Zeilen".into(),
+            String::from_utf8(bytes.to_vec()).map_err(error)?,
+        )],
         "html" | "htm" => {
             let text = String::from_utf8(bytes.to_vec()).map_err(error)?;
             let doc = scraper::Html::parse_document(&text);

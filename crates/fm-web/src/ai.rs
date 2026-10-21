@@ -68,6 +68,7 @@ async fn save_settings(
     if let Some(key) = p.api_key {
         fm_ai::store_key(&p.config.api_key_ref, &key)?;
     }
+    fm_access::set_autostart(p.config.autostart)?;
     p.config.save(&l.guard)?;
     *l.config.write().map_err(error)? = p.config;
     Ok(Json(json!({"ok":true})))
@@ -109,6 +110,8 @@ struct ChatInput {
     chat_id: Option<String>,
     #[serde(default)]
     save: bool,
+    #[serde(default)]
+    history: Vec<fm_ai::Message>,
 }
 async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<Response> {
     if p.question.trim().is_empty() || p.question.len() > 16000 {
@@ -141,6 +144,16 @@ async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<
         .filter(|c| !free && in_scope(&c.path, &p.scope) && ids.contains(&c.id))
         .take(8)
         .collect();
+    if !free
+        && !config.embedding_model.is_empty()
+        && let Ok(semantic) = super::semantic::retrieve(&s, &l, &p.question, &p.scope).await
+    {
+        for c in semantic {
+            if !sources.iter().any(|x| x.id == c.id) && sources.len() < 8 {
+                sources.push(c);
+            }
+        }
+    }
     if sources.is_empty() && !free && p.mode == "zusammenfassen" && !p.scope.is_empty() {
         sources = l
             .catalog
@@ -150,6 +163,7 @@ async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<
             .take(8)
             .collect();
     }
+    let _ai_permit = s.ai_jobs.clone().acquire_owned().await.map_err(error)?;
     let mut used = Vec::new();
     let tokens = if sources.is_empty() && !free {
         vec!["In deinen Unterlagen wurde dazu keine belegte Antwort gefunden.".to_string()]
@@ -184,6 +198,23 @@ async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<
                 });
             }
         }
+        if p.chat_id.is_none() {
+            for message in p
+                .history
+                .iter()
+                .rev()
+                .take(12)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+            {
+                if matches!(message.role.as_str(), "user" | "assistant")
+                    && message.content.len() <= 16000
+                {
+                    messages.push(message.clone());
+                }
+            }
+        }
         let context=serde_json::to_string(&sources.iter().map(|c|json!({"id":c.id,"datei":c.path,"fundstelle":c.location,"text":c.text.chars().take(6000).collect::<String>()})).collect::<Vec<_>>()).map_err(error)?;
         messages.push(fm_ai::Message {
             role: "user".into(),
@@ -203,7 +234,7 @@ async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<
         .into_iter()
         .filter(|c| used.contains(&c.id))
         .collect();
-    let chat_id = if p.save || p.chat_id.is_some() {
+    let chat_id = if p.save {
         let id = p
             .chat_id
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -259,8 +290,20 @@ fn save_chat(l: &Library, id: &str) -> Result<()> {
 }
 async fn chats(State(s): State<AppState>) -> ApiResult<Json<Value>> {
     let l = s.lib()?;
+    let messages = l
+        .catalog
+        .rows("SELECT chat_id,role,content,sources FROM messages ORDER BY rowid")?;
+    let mut sources = std::collections::BTreeMap::new();
+    for row in &messages {
+        let ids: Vec<String> = serde_json::from_str(&row[3]).map_err(error)?;
+        for id in ids {
+            if let Some(c) = l.catalog.source(&id)? {
+                sources.insert(id, c);
+            }
+        }
+    }
     Ok(Json(
-        json!({"chats":l.catalog.rows("SELECT id,title FROM chats ORDER BY rowid DESC")?,"messages":l.catalog.rows("SELECT chat_id,role,content,sources FROM messages ORDER BY rowid")?}),
+        json!({"chats":l.catalog.rows("SELECT id,title FROM chats ORDER BY rowid DESC")?,"messages":messages,"sources":sources.into_values().collect::<Vec<_>>()}),
     ))
 }
 #[derive(Deserialize)]
@@ -335,6 +378,7 @@ struct ChapterInput {
     text: Option<String>,
 }
 async fn draft(State(s): State<AppState>, Json(p): Json<ChapterInput>) -> ApiResult<Json<Value>> {
+    let _ai_permit = s.ai_jobs.clone().acquire_owned().await.map_err(error)?;
     let l = s.lib()?;
     l.guard.resolve(&p.path)?;
     let sources = l

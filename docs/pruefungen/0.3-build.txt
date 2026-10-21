@@ -1,0 +1,4 @@
+    Blocking waiting for file lock on build directory
+   Compiling fm-web v0.3.0 (/workspace/folder-mind/crates/fm-web)
+   Compiling fm-app v0.3.0 (/workspace/folder-mind/crates/fm-app)
+    Finished `release` profile [optimized] target(s) in 4m 45s

@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 [dependencies]
+fm-access = { path = "../fm-access" }
+fm-watcher = { path = "../fm-watcher" }
+axum-server.workspace = true
 fm-ai = { path = "../fm-ai" }
 fm-knowledge = { path = "../fm-knowledge" }
 futures-util.workspace = true

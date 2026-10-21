@@ -1,0 +1,146 @@
+   Compiling fm-web v0.3.0 (/workspace/folder-mind/crates/fm-web)
+   Compiling fm-app v0.3.0 (/workspace/folder-mind/crates/fm-app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.27s
+     Running unittests src/lib.rs (target/debug/deps/fm_access-1bfaebf69a92125c)
+
+running 3 tests
+test tests::certificate_persisted ... ok
+test tests::whitelist_and_admin ... ok
+test tests::passwords ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.77s
+
+     Running unittests src/lib.rs (target/debug/deps/fm_ai-78cfc81aff3bc7b8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mock.rs (target/debug/deps/mock-04bee405f98fd502)
+
+running 2 tests
+test cloud_consent_and_url ... ok
+test api_contract_errors_and_embeddings ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/main.rs (target/debug/deps/folder_mind-fc5f4a080cb09e0e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/fm_catalog-70477f20b069577c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/fm_core-8c0908474873e6d1)
+
+running 3 tests
+test tests::links_are_rejected ... ok
+test tests::path_attacks_and_safe_writes ... ok
+test tests::prefix_collision_and_move ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/fm_extract-462233dbb47d727e)
+
+running 2 tests
+test tests::formats_and_locations ... ok
+test pdf_test::pdf_page ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/fm_index-b5f33f754e63a8f2)
+
+running 1 test
+test tests::retrieval ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src/lib.rs (target/debug/deps/fm_knowledge-45da1d821322e27a)
+
+running 1 test
+test tests::no_source_no_approval_and_notes_survive ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/fm_watcher-7998b5d5fa0537da)
+
+running 1 test
+test tests::waits_for_stable_metadata ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/fm_web-c3292d5caed34159)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/http.rs (target/debug/deps/http-b30cdaf7b69f53a7)
+
+running 4 tests
+test rebinding_rejected ... ok
+test setup_scan_search_and_dedup ... ok
+test unknown_question_needs_no_ai_and_sources_stay_private ... ok
+test remote_whitelist_login_and_local_administration ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.53s
+
+   Doc-tests fm_access
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fm_ai
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fm_catalog
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fm_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fm_extract
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fm_index
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fm_knowledge
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fm_watcher
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fm_web
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

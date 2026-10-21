@@ -2,7 +2,7 @@
 members = ["crates/*"]
 resolver = "2"
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MIT"
 rust-version = "1.88"
@@ -17,7 +17,7 @@ notify = "=8.2.0"
 keyring = { version = "=3.6.3", features = ["windows-native"] }
 rcgen = "=0.14.5"
 rustls = { version = "=0.23.35", default-features = false, features = ["ring", "std", "tls12"] }
-axum-server = { version = "=0.7.2", features = ["tls-rustls-no-provider"] }
+axum-server = { version = "=0.7.3", features = ["tls-rustls-no-provider"] }
 argon2 = "=0.5.3"
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.145"

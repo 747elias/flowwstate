@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 [dependencies]
+fm-access = { path = "../fm-access" }
+rustls.workspace = true
 axum.workspace = true
 fm-core = { path = "../fm-core" }
 fm-web = { path = "../fm-web" }

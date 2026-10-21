@@ -1,0 +1,3 @@
+    Checking fm-web v0.3.0 (/workspace/folder-mind/crates/fm-web)
+    Checking fm-app v0.3.0 (/workspace/folder-mind/crates/fm-app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.67s

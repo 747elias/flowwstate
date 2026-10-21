@@ -52,9 +52,18 @@ async fn save_settings(
     let old = l.config.read().map_err(error)?.clone();
     p.config.password_hash = old.password_hash;
     p.config.api_key_ref = old.api_key_ref;
-    let _ = p.password;
-    if p.config.network_enabled {
-        return Err(error("Netzwerkzugriff wird ab Version 0.3 bereitgestellt").into());
+    if let Some(password) = p.password
+        && !password.is_empty()
+    {
+        p.config.password_hash = fm_access::password_hash(&password)?;
+        s.sessions.lock().map_err(error)?.clear();
+    }
+    fm_access::validate(&p.config)?;
+    if p.config.stable_seconds > 3600
+        || p.config.work_start_hour > 23
+        || p.config.work_end_hour > 24
+    {
+        return Err(error("Ungültige Verarbeitungszeiten").into());
     }
     if let Some(key) = p.api_key {
         fm_ai::store_key(&p.config.api_key_ref, &key)?;

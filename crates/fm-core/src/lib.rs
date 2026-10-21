@@ -131,6 +131,16 @@ impl Guard {
         fs::rename(temp, path)?;
         Ok(())
     }
+    pub fn append(&self, path: impl AsRef<Path>, bytes: &[u8]) -> Result<()> {
+        let _lock = self.lock.lock().map_err(error)?;
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(self.resolve(path)?)?;
+        f.write_all(bytes)?;
+        Ok(())
+    }
     pub fn upload(&self, path: impl AsRef<Path>, bytes: &[u8]) -> Result<()> {
         let _lock = self.lock.lock().map_err(error)?;
         use std::io::Write;

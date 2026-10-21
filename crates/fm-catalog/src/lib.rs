@@ -35,7 +35,7 @@ impl Catalog {
     pub fn record(&self, d: &Document, chunks: &[Chunk]) -> Result<()> {
         let mut c = self.connection.lock().map_err(error)?;
         let tx = c.transaction().map_err(error)?;
-        tx.execute("INSERT INTO document_versions(path,hash,created_at) SELECT path,hash,?2 FROM documents WHERE path=?1 AND hash<>?3",params![d.path,fm_core::now(),d.hash]).map_err(error)?;
+        tx.execute("INSERT INTO document_versions(path,hash,created_at) SELECT path,hash,?2 FROM documents WHERE path=?1 AND hash<>?3 AND hash<>''",params![d.path,fm_core::now(),d.hash]).map_err(error)?;
         tx.execute("INSERT INTO documents(path,hash,size,status,error) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(path) DO UPDATE SET hash=excluded.hash,size=excluded.size,status=excluded.status,error=excluded.error",params![d.path,d.hash,d.size,d.status,d.error]).map_err(error)?;
         tx.execute("DELETE FROM chunks WHERE path=?1", [&d.path])
             .map_err(error)?;

@@ -1,4 +1,6 @@
 mod ai;
+pub mod network;
+pub mod organization;
 use axum::{
     Json, Router,
     body::Body,
@@ -29,6 +31,9 @@ pub struct AppState {
     pub pointer: PathBuf,
     pub csrf: String,
     pub paused: Arc<AtomicBool>,
+    pub sessions: network::Sessions,
+    pub attempts: network::Attempts,
+    pub network_error: Arc<RwLock<String>>,
 }
 pub struct Library {
     pub guard: Guard,
@@ -36,6 +41,7 @@ pub struct Library {
     pub catalog: fm_catalog::Catalog,
     pub index: fm_index::SearchIndex,
     pub processing: Mutex<()>,
+    pub stability: Mutex<fm_watcher::Stability>,
 }
 impl Library {
     pub fn open(guard: Guard) -> Result<Self> {
@@ -49,15 +55,18 @@ impl Library {
             catalog,
             index,
             processing: Mutex::new(()),
+            stability: Mutex::new(fm_watcher::Stability::default()),
         })
     }
     pub fn scan(&self, force: bool) -> Result<()> {
         let _lock = self.processing.lock().map_err(error)?;
         let known = self.catalog.documents()?;
+        let mut changed = false;
         let mut files = Vec::new();
         walk(&self.guard, "unterlagen", &mut files)?;
         let max = self.config.read().map_err(error)?.max_file_mb * 1024 * 1024;
-        for relative in files {
+        for relative in &files {
+            let relative = relative.clone();
             let path = self.guard.resolve(&relative)?;
             let meta = std::fs::metadata(&path)?;
             if meta.len() > max {
@@ -73,11 +82,38 @@ impl Library {
                 )?;
                 continue;
             }
+            let wait = self.config.read().map_err(error)?.stable_seconds;
+            if !self.stability.lock().map_err(error)?.ready(
+                &relative,
+                meta.len(),
+                meta.modified()?,
+                wait,
+            ) {
+                if !known.iter().any(|d| d.path == relative) {
+                    self.catalog.record(
+                        &Document {
+                            path: relative.clone(),
+                            hash: String::new(),
+                            size: meta.len(),
+                            status: "wartet_auf_stabile_datei".into(),
+                            error: String::new(),
+                        },
+                        &[],
+                    )?;
+                }
+                continue;
+            }
             let bytes = std::fs::read(&path)?;
+            let after = std::fs::metadata(&path)?;
+            if meta.len() != after.len() || meta.modified()? != after.modified()? {
+                self.stability.lock().map_err(error)?.forget(&relative);
+                continue;
+            }
             let hash = fm_core::hash(&bytes);
             if !force && known.iter().any(|d| d.path == relative && d.hash == hash) {
                 continue;
             }
+            changed = true;
             let mut d = Document {
                 path: relative.clone(),
                 hash,
@@ -102,7 +138,16 @@ impl Library {
                 }
             }
         }
-        self.index.rebuild(&self.catalog.chunks()?)?;
+        for old in known.iter().filter(|d| !files.contains(&d.path)) {
+            changed = true;
+            self.catalog
+                .execute("DELETE FROM documents WHERE path=?1", &[&old.path])?;
+            self.catalog
+                .execute("DELETE FROM jobs WHERE path=?1", &[&old.path])?;
+        }
+        if changed {
+            self.index.rebuild(&self.catalog.chunks()?)?;
+        }
         Ok(())
     }
 }
@@ -134,6 +179,9 @@ impl AppState {
             pointer,
             csrf: uuid::Uuid::new_v4().to_string(),
             paused: Arc::new(AtomicBool::new(false)),
+            sessions: Arc::new(Mutex::new(Default::default())),
+            attempts: Arc::new(Mutex::new(Default::default())),
+            network_error: Arc::new(RwLock::new(String::new())),
         })
     }
     pub fn lib(&self) -> Result<Arc<Library>> {
@@ -165,69 +213,13 @@ fn peer(request: &Request) -> IpAddr {
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
         .map(|p| p.0.ip())
-        .unwrap_or(IpAddr::from([127, 0, 0, 1]))
-}
-async fn security(State(state): State<AppState>, request: Request, next: Next) -> Response {
-    let ip = peer(&request);
-    let path = request.uri().path();
-    if !ip.is_loopback() {
-        return (StatusCode::FORBIDDEN, "Zugriff verweigert").into_response();
-    }
-    let host = request
-        .headers()
-        .get(header::HOST)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("");
-    if !["127.0.0.1:8484", "localhost:8484", "[::1]:8484"].contains(&host) {
-        return (StatusCode::FORBIDDEN, "Ungültiger Host").into_response();
-    }
-    if !matches!(request.method().as_str(), "GET" | "HEAD" | "OPTIONS") {
-        if request
-            .headers()
-            .get("x-csrf-token")
-            .and_then(|v| v.to_str().ok())
-            != Some(state.csrf.as_str())
-        {
-            return (StatusCode::FORBIDDEN, "CSRF-Prüfung fehlgeschlagen").into_response();
-        }
-        if let Some(origin) = request
-            .headers()
-            .get(header::ORIGIN)
-            .and_then(|v| v.to_str().ok())
-            && origin != format!("http://{host}")
-        {
-            return (StatusCode::FORBIDDEN, "Ursprung nicht erlaubt").into_response();
-        }
-    }
-    if state.lib().is_err()
-        && ![
-            "/api/state",
-            "/api/setup",
-            "/api/ai/test",
-            "/api/browse",
-            "/api/browse/create",
-            "/einrichtung",
-            "/app.js",
-            "/style.css",
-            "/htmx.min.js",
-        ]
-        .contains(&path)
-    {
-        return Redirect::to("/einrichtung").into_response();
-    }
-    let mut response = next.run(request).await;
-    response
-        .headers_mut()
-        .insert("x-content-type-options", "nosniff".parse().unwrap());
-    response.headers_mut().insert("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'".parse().unwrap());
-    response
-        .headers_mut()
-        .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
-    response
+        .unwrap_or(IpAddr::from([0, 0, 0, 0]))
 }
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(ai::routes())
+        .merge(network::routes())
+        .merge(organization::routes())
         .route("/api/state", get(state_info))
         .route("/api/setup", post(setup))
         .route("/api/browse", get(browse))
@@ -238,11 +230,16 @@ pub fn router(state: AppState) -> Router {
         .route("/api/source", get(source))
         .route("/api/dashboard", get(dashboard))
         .fallback(get(asset))
-        .layer(middleware::from_fn_with_state(state.clone(), security))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            network::security,
+        ))
         .with_state(state)
 }
-async fn state_info(State(s): State<AppState>) -> Json<Value> {
-    Json(json!({"configured":s.lib().is_ok(),"csrf":s.csrf,"version":env!("CARGO_PKG_VERSION")}))
+async fn state_info(State(s): State<AppState>, request: Request) -> Json<Value> {
+    Json(
+        json!({"configured":s.lib().is_ok(),"csrf":s.csrf,"version":env!("CARGO_PKG_VERSION"),"login_required":!network::authenticated(&s,&request,peer(&request))}),
+    )
 }
 #[derive(Deserialize)]
 struct Setup {
@@ -276,6 +273,7 @@ async fn setup(State(s): State<AppState>, Json(p): Json<Setup>) -> ApiResult<Jso
     {
         fm_ai::store_key(&config.api_key_ref, &key)?;
     }
+    fm_access::validate(&config)?;
     fm_core::initialize(&guard, &config)?;
     let lib = Arc::new(Library::open(guard)?);
     // Der einzige Zeiger ausserhalb des Datenordners gehört zum Benutzerprofil.
@@ -420,7 +418,7 @@ async fn dashboard(State(s): State<AppState>) -> ApiResult<Json<Value>> {
     let l = s.lib()?;
     let d = l.catalog.documents()?;
     Ok(Json(
-        json!({"documents":d.len(),"errors":d.iter().filter(|d|d.status=="fehlgeschlagen").count(),"pending":0,"path":l.guard.root(),"paused":s.paused.load(Ordering::Relaxed)}),
+        json!({"documents":d.len(),"errors":d.iter().filter(|d|d.status=="fehlgeschlagen").count(),"pending":l.catalog.rows("SELECT path FROM knowledge_pages WHERE status='wartet_auf_freigabe'")?.len(),"path":l.guard.root(),"paused":s.paused.load(Ordering::Relaxed)}),
     ))
 }
 async fn asset(request: Request) -> Response {

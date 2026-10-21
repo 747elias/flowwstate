@@ -1,0 +1,1 @@
+//! Fachmodul für Folder-Mind.

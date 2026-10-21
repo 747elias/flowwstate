@@ -1,0 +1,11 @@
+   Compiling fm-core v0.1.0 (/workspace/folder-mind/crates/fm-core)
+   Compiling fm-catalog v0.1.0 (/workspace/folder-mind/crates/fm-catalog)
+   Compiling fm-index v0.1.0 (/workspace/folder-mind/crates/fm-index)
+   Compiling fm-extract v0.1.0 (/workspace/folder-mind/crates/fm-extract)
+   Compiling fm-web v0.1.0 (/workspace/folder-mind/crates/fm-web)
+   Compiling fm-ai v0.1.0 (/workspace/folder-mind/crates/fm-ai)
+   Compiling fm-watcher v0.1.0 (/workspace/folder-mind/crates/fm-watcher)
+   Compiling fm-access v0.1.0 (/workspace/folder-mind/crates/fm-access)
+   Compiling fm-knowledge v0.1.0 (/workspace/folder-mind/crates/fm-knowledge)
+   Compiling fm-app v0.1.0 (/workspace/folder-mind/crates/fm-app)
+    Finished `release` profile [optimized] target(s) in 34.76s

@@ -1,0 +1,9 @@
+[package]
+name = "fm-watcher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[dependencies]
+fm-core = { path = "../fm-core" }
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,2 @@
+TCP sorgt fuer zuverlaessigen Transport.
+UDP versendet Datagramme.

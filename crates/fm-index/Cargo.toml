@@ -1,0 +1,10 @@
+[package]
+name = "fm-index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[dependencies]
+fm-core = { path = "../fm-core" }
+tantivy.workspace = true
+[dev-dependencies]
+tempfile.workspace = true

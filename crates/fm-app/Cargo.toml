@@ -1,0 +1,17 @@
+[package]
+name = "fm-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[dependencies]
+axum.workspace = true
+fm-core = { path = "../fm-core" }
+fm-web = { path = "../fm-web" }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+[dev-dependencies]
+tempfile.workspace = true
+[[bin]]
+name = "folder-mind"
+path = "src/main.rs"

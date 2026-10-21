@@ -105,3 +105,52 @@ async fn rebinding_rejected() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
+
+#[tokio::test]
+async fn unknown_question_needs_no_ai_and_sources_stay_private() {
+    let t = tempfile::tempdir().unwrap();
+    let data = t.path().join("data");
+    std::fs::create_dir(&data).unwrap();
+    let s = AppState::new(t.path().join("pointer")).unwrap();
+    let csrf = s.csrf.clone();
+    let r = router(s);
+    request(
+        r.clone(),
+        "POST",
+        "/api/setup",
+        &csrf,
+        serde_json::json!({"path":data}),
+    )
+    .await;
+    let response = r
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/chat")
+                .header("host", "127.0.0.1:8484")
+                .header("content-type", "application/json")
+                .header("x-csrf-token", &csrf)
+                .body(Body::from(
+                    serde_json::json!({"question":"Quantenbanane","mode":"erklaeren"}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), 1_000_000).await.unwrap();
+    assert!(String::from_utf8_lossy(&body).contains("keine belegte Antwort"));
+    assert_eq!(
+        request(
+            r,
+            "GET",
+            "/api/source?id=../../etc/passwd",
+            "",
+            serde_json::Value::Null
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+}

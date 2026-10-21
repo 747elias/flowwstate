@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 [dependencies]
+fm-ai = { path = "../fm-ai" }
+fm-knowledge = { path = "../fm-knowledge" }
+futures-util.workspace = true
+async-stream.workspace = true
 fm-core = { path = "../fm-core" }
 fm-catalog = { path = "../fm-catalog" }
 fm-extract = { path = "../fm-extract" }

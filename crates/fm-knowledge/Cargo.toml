@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 [dependencies]
+serde_json.workspace = true
+uuid.workspace = true
 fm-core = { path = "../fm-core" }
 [dev-dependencies]
 tempfile.workspace = true

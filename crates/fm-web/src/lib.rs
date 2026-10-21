@@ -1,3 +1,4 @@
+mod ai;
 use axum::{
     Json, Router,
     body::Body,
@@ -202,6 +203,7 @@ async fn security(State(state): State<AppState>, request: Request, next: Next) -
         && ![
             "/api/state",
             "/api/setup",
+            "/api/ai/test",
             "/api/browse",
             "/api/browse/create",
             "/einrichtung",
@@ -225,6 +227,7 @@ async fn security(State(state): State<AppState>, request: Request, next: Next) -
 }
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .merge(ai::routes())
         .route("/api/state", get(state_info))
         .route("/api/setup", post(setup))
         .route("/api/browse", get(browse))
@@ -248,6 +251,8 @@ struct Setup {
     name: String,
     #[serde(default = "default_template")]
     template: String,
+    config: Option<Config>,
+    api_key: Option<String>,
 }
 fn default_template() -> String {
     "lehre-informatik".into()
@@ -257,11 +262,20 @@ async fn setup(State(s): State<AppState>, Json(p): Json<Setup>) -> ApiResult<Jso
         return Err(error("Einrichtung bereits abgeschlossen").into());
     }
     let guard = Guard::new(&p.path)?;
-    let config = Config {
+    let mut config = Config {
         name: p.name,
         template: p.template,
-        ..Config::default()
+        ..p.config.unwrap_or_default()
     };
+    config.api_key_ref = format!(
+        "folder-mind-{}",
+        fm_core::hash(guard.root().to_string_lossy().as_bytes())
+    );
+    if let Some(key) = p.api_key
+        && !key.is_empty()
+    {
+        fm_ai::store_key(&config.api_key_ref, &key)?;
+    }
     fm_core::initialize(&guard, &config)?;
     let lib = Arc::new(Library::open(guard)?);
     // Der einzige Zeiger ausserhalb des Datenordners gehört zum Benutzerprofil.

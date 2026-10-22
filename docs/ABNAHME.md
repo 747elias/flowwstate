@@ -1,6 +1,6 @@
 # Abnahme Folder-Mind 0.4
 
-Die Anwendung ist bis Version 0.4 implementiert. Eine Windows-x86_64-MSVC-EXE wird mitgeliefert. Die abschliessende native Windows-Abnahme ist noch offen: Die ausführende Umgebung ist Linux, keine Windows-VM.
+Die Anwendung ist bis Version 0.4 implementiert. Eine Windows-x86_64-MSVC-EXE wird mitgeliefert. Die abschliessende interaktive Windows-Abnahme ist noch offen: Die lokale Entwicklungsumgebung ist Linux; automatisierte native Windows-Prüfungen laufen zusätzlich auf GitHub Actions.
 
 ## Abnahmekriterien aus Abschnitt 23
 
@@ -9,7 +9,7 @@ Die Anwendung ist bis Version 0.4 implementiert. Eine Windows-x86_64-MSVC-EXE wi
 | Nach dem ersten Start ist die komplette Einrichtung ohne Kommandozeile möglich. | **nicht erfüllt** für die abschliessende Windows-Abnahme | Der vollständige Assistent mit Ordnerwahl, Vorlage, KI-Verbindung und Abschluss ist per HTTP und im Browser bestanden. Windows-Doppelklick, nativer Browserstart und Tray wurden hier nicht ausgeführt. |
 | Die Web UI ist von einem anderen Gerät im Netz nicht erreichbar. | **erfüllt** im Standardbetrieb | HTTP bindet nur 127.0.0.1 und ::1. Ein Sockettest bestätigt: Loopback erreichbar, Geräte-IP:8484 verweigert. Netzwerkfreigabe erfordert validierte Whitelist, Passwort und separaten TLS-Listener. |
 | Eine Datei im richtigen Kapitelordner wird erkannt, genau einmal verarbeitet und im Ordnerbaum angezeigt. | **erfüllt** | HTTP-Test mit zwei Scans ohne zusätzliche Dokumentversion; Watcher-/Stabilitätstest; Browserprüfung mit sieben Formaten, Drag-and-drop und Pause/Fortsetzen. |
-| Versuche, ausserhalb des Datenordners zu schreiben, werden blockiert und protokolliert. | **erfüllt** in den ausgeführten Sicherheitsprüfungen | Unit-Tests für Traversierung, absolute/Windows-/UNC-Pfade, Gerätenamen, Symlinks, Hardlinks und Verschieben. HTTP-Pfadangriffe auf Ordner und Notizen liefern Fehler und erscheinen im Protokoll. Der zusätzliche Windows-Junction-Test wurde crosskompiliert; seine native Ausführung steht aus. |
+| Versuche, ausserhalb des Datenordners zu schreiben, werden blockiert und protokolliert. | **erfüllt** in den ausgeführten Sicherheitsprüfungen | Unit-Tests für Traversierung, absolute/Windows-/UNC-Pfade, Gerätenamen, Symlinks, Hardlinks und Verschieben. HTTP-Pfadangriffe auf Ordner und Notizen liefern Fehler und erscheinen im Protokoll. Der zusätzliche Windows-Junction-Test wurde auch nativ auf GitHub Actions erfolgreich ausgeführt. |
 | Die Volltextsuche findet Begriffe aus den Unterlagen. | **erfüllt** | Tantivy-Unit-Test, HTTP-Test und Browserprüfung mit PDF/TXT/MD/HTML; unbeantwortbare Frage liefert die vorgesehene Meldung ohne KI-Aufruf. |
 
 „Erfüllt“ bezeichnet die implementierten und hier direkt nachgewiesenen Funktionen. Es ersetzt keine native Windows-Freigabe des Gesamtprodukts.
@@ -54,6 +54,10 @@ Der KI-Mock prüft zusätzlich falsche Schlüssel, fehlende Modelle, Zeitübersc
 
 ## Native Prüfungen, die noch fehlen
 
-Windows-Doppelklick/Browserstart, Tray-Nachrichtenloop, Windows Credential Manager, tatsächliche MAC-Auflösung in einem lokalen Netz, HKCU-Autostart, Windows-OCR und der Junction-Test wurden hier nicht nativ ausgeführt. Der enthaltene `windows-latest`-Workflow kann Builds und Tests unter Windows ausführen; er wurde nicht für ein externes Repository gestartet. Interaktive Tray-/OCR-/Netztests bleiben zusätzlich manuell durchzuführen.
+Windows-Doppelklick/Browserstart, Tray-Nachrichtenloop, Windows Credential Manager, tatsächliche MAC-Auflösung in einem lokalen Netz, HKCU-Autostart und Windows-OCR wurden in der lokalen Linux-Umgebung nicht nativ ausgeführt. Der enthaltene `windows-latest`-Workflow führt Builds und automatisierte Tests unter Windows aus; die [aktuellen Ergebnisse](https://github.com/747elias/folder-mind/actions/workflows/windows.yml) stehen auf GitHub. Interaktive Tray-/OCR-/Netztests bleiben zusätzlich manuell durchzuführen.
+
+## Veröffentlichung auf GitHub
+
+Der vollständige Quellcode liegt unter [747elias/folder-mind](https://github.com/747elias/folder-mind), einschliesslich der Tags 0.1 bis 0.4. Der erste native Windows-Lauf hat die Junction-Sicherheitsprüfung erfolgreich ausgeführt und anschliessend eine durch Git-Zeilenendenkonvertierung beschädigte PDF-Testdatei erkannt. Version 0.4.1 schützt die Binärdateien ausdrücklich durch `.gitattributes`. Die lokalen Nachweise oben dokumentieren weiterhin die ursprüngliche Linux-/Cross-Build-Abnahme; ergänzende native Ergebnisse werden im GitHub-Release verlinkt.
 
 Die begründeten funktionalen Abweichungen, insbesondere geprüfte statt vorzeitige SSE-Anzeige, explizite KI-Entwürfe, Kontextgrenzen, ZIP-Grenze und fehlender SCM-Dienst, stehen in README → „Abweichungen vom Konzept“.

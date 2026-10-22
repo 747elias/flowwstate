@@ -127,7 +127,7 @@ cargo build --release --locked --target x86_64-pc-windows-msvc
 
 Ergebnis: `target\x86_64-pc-windows-msvc\release\folder-mind.exe`. Die C-Laufzeit ist statisch eingebunden, der Release-Build verwendet das Windows-GUI-Subsystem. HTML, htmx und JavaScript werden durch `rust-embed` eingebettet; ein Frontend-Build mit Node ist nicht erforderlich.
 
-`.github/workflows/windows.yml` führt auf `windows-latest` Build, Tests und Clippy aus und liefert die EXE als Artefakt. Die Workflow-Datei ist enthalten; ein GitHub-Lauf wurde für diese Lieferung nicht ausgelöst.
+Die fertige Windows-EXE steht unter [GitHub Releases](https://github.com/747elias/folder-mind/releases). `.github/workflows/windows.yml` führt auf `windows-latest` Build, Tests und Clippy aus und liefert die EXE als Artefakt. Die [aktuellen Prüfläufe](https://github.com/747elias/folder-mind/actions/workflows/windows.yml) sind auf GitHub einsehbar. `.gitattributes` verhindert insbesondere, dass Git die binären PDF-Beispiele beim Windows-Checkout durch Zeilenendenkonvertierung beschädigt.
 
 Der Workspace enthält die zehn Crates aus Abschnitt 14.1. Direkte Abhängigkeiten sind exakt festgelegt; `Cargo.lock` fixiert den aufgelösten Graphen. Unter Linux sind Entwicklung und portable Tests möglich, Credential Manager, Tray, MAC-Auflösung, Autostart und OCR sind Windows-Funktionen. Zum isolierten Entwickeln können `FOLDER_MIND_POINTER` und `FOLDER_MIND_NO_BROWSER=1` gesetzt werden.
 

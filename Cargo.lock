@@ -925,7 +925,7 @@ dependencies = [
 
 [[package]]
 name = "fm-access"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "argon2",
  "fm-core",
@@ -940,7 +940,7 @@ dependencies = [
 
 [[package]]
 name = "fm-ai"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "axum",
  "fm-core",
@@ -956,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "fm-app"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "axum",
  "fm-access",
@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "fm-catalog"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "fm-core",
  "rusqlite",
@@ -985,7 +985,7 @@ dependencies = [
 
 [[package]]
 name = "fm-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "dunce",
  "serde",
@@ -1000,7 +1000,7 @@ dependencies = [
 
 [[package]]
 name = "fm-extract"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "calamine",
  "fm-core",
@@ -1014,7 +1014,7 @@ dependencies = [
 
 [[package]]
 name = "fm-index"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "fm-core",
  "serde",
@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "fm-knowledge"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "fm-core",
  "serde_json",
@@ -1035,7 +1035,7 @@ dependencies = [
 
 [[package]]
 name = "fm-watcher"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "fm-core",
  "notify",
@@ -1045,7 +1045,7 @@ dependencies = [
 
 [[package]]
 name = "fm-web"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-stream",
  "axum",

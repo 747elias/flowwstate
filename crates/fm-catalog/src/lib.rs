@@ -1,17 +1,16 @@
 use fm_core::{Chunk, Document, Guard, Result, error};
 use rusqlite::{Connection, params};
 use std::sync::Mutex;
+mod workflows;
+pub use workflows::Collection;
 pub struct Catalog {
     connection: Mutex<Connection>,
 }
 impl Catalog {
     pub fn open(guard: &Guard) -> Result<Self> {
-        let c =
+        let mut c =
             Connection::open(guard.resolve(".folder-mind/folder-mind.sqlite")?).map_err(error)?;
-        c.execute_batch(include_str!("../../../migrations/001_initial.sql"))
-            .map_err(error)?;
-        c.execute_batch(include_str!("../../../migrations/002_source_archive.sql"))
-            .map_err(error)?;
+        migrate(&mut c, guard)?;
         Ok(Self {
             connection: Mutex::new(c),
         })
@@ -110,6 +109,14 @@ impl Catalog {
         if integrity != "ok" {
             return Err(error("Die Sicherungsdatenbank ist beschädigt"));
         }
+        let version: u32 = check
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .map_err(error)?;
+        if version > 3 {
+            return Err(error(
+                "Diese Sicherung benötigt eine neuere Folder-Mind-Version",
+            ));
+        }
         drop(check);
         let mut c = self.connection.lock().map_err(error)?;
         c.restore(
@@ -118,10 +125,7 @@ impl Catalog {
             None::<fn(rusqlite::backup::Progress)>,
         )
         .map_err(error)?;
-        c.execute_batch(include_str!("../../../migrations/001_initial.sql"))
-            .map_err(error)?;
-        c.execute_batch(include_str!("../../../migrations/002_source_archive.sql"))
-            .map_err(error)?;
+        migrate(&mut c, guard)?;
         Ok(())
     }
     pub fn snapshot(&self, guard: &Guard, path: &str) -> Result<()> {
@@ -129,6 +133,52 @@ impl Catalog {
         c.backup(rusqlite::MAIN_DB, guard.resolve(path)?, None)
             .map_err(error)
     }
+}
+
+fn migrate(c: &mut Connection, guard: &Guard) -> Result<()> {
+    c.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE;")
+        .map_err(error)?;
+    let version: u32 = c
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .map_err(error)?;
+    if version > 3 {
+        return Err(error(
+            "Dieser Datenordner stammt aus einer neueren Folder-Mind-Version. Bitte die neuere EXE starten.",
+        ));
+    }
+    if version == 3 {
+        return Ok(());
+    }
+    if version > 0 {
+        guard.mkdir("backups")?;
+        let prefix = format!(
+            "backups/vor-update-{}-{}",
+            fm_core::now(),
+            uuid::Uuid::new_v4()
+        );
+        c.backup(
+            rusqlite::MAIN_DB,
+            guard.resolve(format!("{prefix}.sqlite"))?,
+            None,
+        )
+        .map_err(error)?;
+        let config = std::fs::read(guard.resolve(".folder-mind/config.toml")?)?;
+        guard.upload(format!("{prefix}.toml"), &config)?;
+    }
+    let tx = c.transaction().map_err(error)?;
+    if version < 1 {
+        let sql = include_str!("../../../migrations/001_initial.sql")
+            .replace("PRAGMA journal_mode=DELETE;", "")
+            .replace("PRAGMA foreign_keys=ON;", "");
+        tx.execute_batch(&sql).map_err(error)?;
+    }
+    if version < 2 {
+        tx.execute_batch(include_str!("../../../migrations/002_source_archive.sql"))
+            .map_err(error)?;
+    }
+    tx.execute_batch(include_str!("../../../migrations/003_workflows.sql"))
+        .map_err(error)?;
+    tx.commit().map_err(error)
 }
 
 #[cfg(test)]

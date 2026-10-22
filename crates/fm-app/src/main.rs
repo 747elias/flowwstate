@@ -29,6 +29,13 @@ async fn run() -> Result<()> {
                 && let Ok(info) = response.json::<serde_json::Value>().await
                 && info["product"] == "folder-mind"
             {
+                if info["version"].as_str() != Some(env!("CARGO_PKG_VERSION")) {
+                    show_error(&format!(
+                        "Folder-Mind {} läuft noch. Erstelle in der bisherigen Weboberfläche eine Sicherung und beende die alte Version über das Tray-Menü „Beenden“. Starte danach diese neue EXE erneut. Deine gespeicherten Daten und Einstellungen werden automatisch übernommen.",
+                        info["version"].as_str().unwrap_or("(ältere Version)")
+                    ));
+                    return Ok(());
+                }
                 open_browser();
                 return Ok(());
             }
@@ -43,6 +50,7 @@ async fn run() -> Result<()> {
         open_browser();
     }
     tokio::spawn(fm_web::organization::background(state.clone()));
+    tokio::spawn(fm_web::inbox::background(state.clone()));
     tokio::spawn(fm_web::network::serve(state.clone()));
     let log_state = state.clone();
     let (log_tx, log_rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(1024);
@@ -63,6 +71,14 @@ async fn run() -> Result<()> {
         .init();
     #[cfg(windows)]
     {
+        if state
+            .lib()
+            .ok()
+            .is_some_and(|l| l.config.read().map(|c| c.autostart).unwrap_or(false))
+            && let Err(e) = fm_access::set_autostart(true)
+        {
+            show_error(&e.to_string());
+        }
         let tray_state = state.clone();
         std::thread::spawn(move || {
             if let Err(e) = tray::run(tray_state.clone()) {

@@ -62,6 +62,8 @@ async fn save_settings(
     if p.config.stable_seconds > 3600
         || p.config.work_start_hour > 23
         || p.config.work_end_hour > 24
+        || !p.config.inbox_confidence.is_finite()
+        || !(0.5..=1.0).contains(&p.config.inbox_confidence)
     {
         return Err(error("Ungültige Verarbeitungszeiten").into());
     }
@@ -95,46 +97,58 @@ async fn test_connection(
         json!({"ok":true,"message":"Verbindung erfolgreich","models":models}),
     ))
 }
-fn client(l: &Library) -> Result<fm_ai::Client> {
+pub(crate) fn client(l: &Library) -> Result<fm_ai::Client> {
     let c = l.config.read().map_err(error)?.clone();
     let key = fm_ai::load_key(&c.api_key_ref)?;
     fm_ai::Client::new(c, key)
 }
 #[derive(Deserialize)]
-struct ChatInput {
-    question: String,
+pub(crate) struct ChatInput {
+    pub question: String,
     #[serde(default)]
-    scope: String,
+    pub scope: String,
     #[serde(default)]
-    mode: String,
-    chat_id: Option<String>,
+    pub mode: String,
+    pub chat_id: Option<String>,
     #[serde(default)]
-    save: bool,
+    pub save: bool,
     #[serde(default)]
-    history: Vec<fm_ai::Message>,
+    pub history: Vec<fm_ai::Message>,
+    #[serde(default)]
+    pub agent_id: String,
 }
-async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<Response> {
+async fn chat(State(s): State<AppState>, Json(mut p): Json<ChatInput>) -> ApiResult<Response> {
     if p.question.trim().is_empty() || p.question.len() > 16000 {
         return Err(error("Bitte eine Frage mit höchstens 16000 Zeichen eingeben").into());
     }
     let l = s.lib()?;
+    let id = if !p.agent_id.is_empty() {
+        p.agent_id.as_str()
+    } else if p.mode.is_empty() {
+        "erklaeren"
+    } else {
+        p.mode.as_str()
+    };
+    let agent = super::agents::find(&l, id)?;
+    if p.scope.is_empty() {
+        p.scope = agent.scope.clone();
+    }
+    if matches!(agent.kind.as_str(), "organizer" | "builder") {
+        let (text, actions) = if agent.kind == "organizer" {
+            super::agents::organize(&s, &l, &p).await?
+        } else {
+            super::agents::build(&s, &l, &p).await?
+        };
+        return finish_chat(&l, &p, &agent, vec![text], vec![], false, actions).map_err(Into::into);
+    }
     let config = l.config.read().map_err(error)?.clone();
-    let free = p.mode == "frei";
+    let free = !agent.grounded;
     if free && !config.allow_free_chat {
         return Err(error("Freier Chat ist in den Einstellungen deaktiviert").into());
     }
-    let mode = match p.mode.as_str() {
-        "zusammenfassen" => "Fasse die Unterlagen knapp und verständlich zusammen.",
-        "abfragen" => {
-            "Du bist ein Lerntutor. Stelle jeweils eine Lernfrage. Wenn der Nutzer antwortet, bewerte die Antwort anhand der Unterlagen und erkläre Fehler."
-        }
-        "frei" => {
-            "Beantworte die Frage allgemein. Kennzeichne, dass dies ein freier Chat ohne Unterlagenbezug ist."
-        }
-        _ => "Erkläre die Frage einfach und mit Beispielen.",
-    };
+    let mode = &agent.instructions;
     let all = l.catalog.chunks()?;
-    let ids = if free {
+    let ids = if free || agent.kind == "summary" {
         vec![]
     } else {
         l.index.search(&p.question, 30)?
@@ -145,6 +159,7 @@ async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<
         .take(8)
         .collect();
     if !free
+        && agent.kind != "summary"
         && !config.embedding_model.is_empty()
         && let Ok(semantic) = super::semantic::retrieve(&s, &l, &p.question, &p.scope).await
     {
@@ -154,14 +169,14 @@ async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<
             }
         }
     }
-    if sources.is_empty() && !free && p.mode == "zusammenfassen" && !p.scope.is_empty() {
-        sources = l
+    if !free && agent.kind == "summary" {
+        let all = l
             .catalog
             .chunks()?
             .into_iter()
             .filter(|c| in_scope(&c.path, &p.scope))
-            .take(8)
             .collect();
+        sources = sample_sources(all, 24);
     }
     let _ai_permit = s.ai_jobs.clone().acquire_owned().await.map_err(error)?;
     let mut used = Vec::new();
@@ -179,43 +194,9 @@ async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<
                 }
             ),
         }];
-        if let Some(id) = &p.chat_id {
-            validate_id(id)?;
-            for row in l
-                .catalog
-                .rows("SELECT chat_id,role,content FROM messages ORDER BY rowid")?
-                .into_iter()
-                .filter(|r| &r[0] == id)
-                .rev()
-                .take(12)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-            {
-                messages.push(fm_ai::Message {
-                    role: row[1].clone(),
-                    content: row[2].clone(),
-                });
-            }
-        }
-        if p.chat_id.is_none() {
-            for message in p
-                .history
-                .iter()
-                .rev()
-                .take(12)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-            {
-                if matches!(message.role.as_str(), "user" | "assistant")
-                    && message.content.len() <= 16000
-                {
-                    messages.push(message.clone());
-                }
-            }
-        }
-        let context=serde_json::to_string(&sources.iter().map(|c|json!({"id":c.id,"datei":c.path,"fundstelle":c.location,"text":c.text.chars().take(6000).collect::<String>()})).collect::<Vec<_>>()).map_err(error)?;
+        messages.extend(conversation(&l, &p)?);
+        let excerpt_limit = if agent.kind == "summary" { 2000 } else { 6000 };
+        let context=serde_json::to_string(&sources.iter().map(|c|json!({"id":c.id,"datei":c.path,"fundstelle":c.location,"text":c.text.chars().take(excerpt_limit).collect::<String>()})).collect::<Vec<_>>()).map_err(error)?;
         messages.push(fm_ai::Message {
             role: "user".into(),
             content: if free {
@@ -234,15 +215,67 @@ async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<
         .into_iter()
         .filter(|c| used.contains(&c.id))
         .collect();
+    finish_chat(&l, &p, &agent, tokens, sources, free, vec![]).map_err(Into::into)
+}
+fn sample_sources(all: Vec<Chunk>, limit: usize) -> Vec<Chunk> {
+    if all.len() <= limit {
+        return all;
+    }
+    (0..limit)
+        .map(|i| all[i * all.len() / limit].clone())
+        .collect()
+}
+pub(crate) fn conversation(l: &Library, p: &ChatInput) -> Result<Vec<fm_ai::Message>> {
+    if let Some(id) = &p.chat_id {
+        validate_id(id)?;
+        Ok(l.catalog
+            .rows("SELECT chat_id,role,content FROM messages ORDER BY rowid")?
+            .into_iter()
+            .filter(|r| &r[0] == id)
+            .rev()
+            .take(12)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .map(|r| fm_ai::Message {
+                role: r[1].clone(),
+                content: r[2].clone(),
+            })
+            .collect())
+    } else {
+        Ok(p.history
+            .iter()
+            .rev()
+            .take(12)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .filter(|m| matches!(m.role.as_str(), "user" | "assistant") && m.content.len() <= 16000)
+            .cloned()
+            .collect())
+    }
+}
+fn finish_chat(
+    l: &Library,
+    p: &ChatInput,
+    agent: &fm_core::Agent,
+    tokens: Vec<String>,
+    sources: Vec<Chunk>,
+    free: bool,
+    mut proposals: Vec<fm_core::ActionProposal>,
+) -> Result<Response> {
+    let used: Vec<_> = sources.iter().map(|c| c.id.clone()).collect();
     let chat_id = if p.save {
         let id = p
             .chat_id
+            .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         validate_id(&id)?;
         l.catalog.execute(
             "INSERT OR IGNORE INTO chats(id,title) VALUES(?1,?2)",
             &[&id, &p.question.chars().take(60).collect::<String>()],
         )?;
+        l.catalog.execute("INSERT INTO chat_agents(chat_id,agent_id) VALUES(?1,?2) ON CONFLICT(chat_id) DO UPDATE SET agent_id=excluded.agent_id",&[&id,&agent.id])?;
         for (role, content, refs) in [
             ("user", p.question.clone(), "[]".to_string()),
             (
@@ -262,12 +295,22 @@ async fn chat(State(s): State<AppState>, Json(p): Json<ChatInput>) -> ApiResult<
                 ],
             )?;
         }
-        save_chat(&l, &id)?;
+        save_chat(l, &id)?;
+        for proposal in &mut proposals {
+            proposal.chat_id = id.clone();
+            l.catalog
+                .put_entry(fm_catalog::Collection::Proposals, &proposal.id, proposal)?;
+        }
         Some(id)
     } else {
         None
     };
-    let stream = async_stream::stream! {yield Ok::<Event,Infallible>(Event::default().event("sources").data(json!({"sources":sources,"free":free}).to_string()));for token in tokens{yield Ok(Event::default().event("token").data(json!({"text":token}).to_string()));}yield Ok(Event::default().event("done").data(json!({"chat_id":chat_id}).to_string()));};
+    let html = super::markdown::cited(&tokens.concat(), &sources);
+    let stream = async_stream::stream! {
+        yield Ok::<Event,Infallible>(Event::default().event("sources").data(json!({"sources":sources,"free":free}).to_string()));
+        for token in tokens {yield Ok(Event::default().event("token").data(json!({"text":token}).to_string()));}
+        yield Ok(Event::default().event("done").data(json!({"chat_id":chat_id,"html":html,"proposals":proposals}).to_string()));
+    };
     Ok(Sse::new(stream)
         .keep_alive(KeepAlive::default())
         .into_response())
@@ -302,8 +345,21 @@ async fn chats(State(s): State<AppState>) -> ApiResult<Json<Value>> {
             }
         }
     }
+    let rendered = messages
+        .iter()
+        .map(|row| {
+            let ids: Vec<String> = serde_json::from_str(&row[3]).unwrap_or_default();
+            let refs = ids
+                .iter()
+                .filter_map(|id| sources.get(id).cloned())
+                .collect::<Vec<_>>();
+            super::markdown::cited(&row[2], &refs)
+        })
+        .collect::<Vec<_>>();
     Ok(Json(
-        json!({"chats":l.catalog.rows("SELECT id,title FROM chats ORDER BY rowid DESC")?,"messages":messages,"sources":sources.into_values().collect::<Vec<_>>()}),
+        json!({"chats":l.catalog.rows("SELECT id,title FROM chats ORDER BY rowid DESC")?,"messages":messages,"rendered":rendered,
+        "sources":sources.into_values().collect::<Vec<_>>(),"chat_agents":l.catalog.rows("SELECT chat_id,agent_id FROM chat_agents")?,
+        "proposals":l.catalog.entries::<fm_core::ActionProposal>(fm_catalog::Collection::Proposals)?}),
     ))
 }
 #[derive(Deserialize)]

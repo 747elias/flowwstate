@@ -40,6 +40,35 @@ pub fn validate_url(base: &str) -> Result<()> {
     Ok(())
 }
 impl Client {
+    pub async fn complete_json<T: serde::de::DeserializeOwned>(
+        &self,
+        messages: Vec<Message>,
+    ) -> Result<T> {
+        let text = self.complete(messages).await?.concat();
+        let mut value: Value = parse_json(&text)?;
+        self.redact_json(&mut value);
+        serde_json::from_value(value).map_err(|_| {
+            error("Der strukturierte KI-Vorschlag entspricht nicht dem erwarteten Format")
+        })
+    }
+    fn redact_json(&self, value: &mut Value) {
+        match value {
+            Value::String(s) => *s = self.redact(s),
+            Value::Array(values) => {
+                for value in values {
+                    self.redact_json(value);
+                }
+            }
+            Value::Object(values) => {
+                let previous = std::mem::take(values);
+                for (key, mut value) in previous {
+                    self.redact_json(&mut value);
+                    values.insert(self.redact(&key), value);
+                }
+            }
+            _ => {}
+        }
+    }
     pub fn new(config: Config, key: String) -> Result<Self> {
         Self::with_timeout(config, key, Duration::from_secs(90))
     }
@@ -225,6 +254,17 @@ impl Client {
         }
         Ok(out)
     }
+}
+pub fn parse_json<T: serde::de::DeserializeOwned>(text: &str) -> Result<T> {
+    let text = text.trim();
+    let text = if text.starts_with("```") && text.ends_with("```") {
+        text.split_once('\n')
+            .map(|(_, rest)| rest[..rest.len().saturating_sub(3)].trim())
+            .unwrap_or(text)
+    } else {
+        text
+    };
+    serde_json::from_str(text).map_err(|_| error("Das KI-Modell hat keinen gültigen strukturierten Vorschlag geliefert. Bitte erneut versuchen oder das Ziel selbst wählen."))
 }
 pub fn store_key(reference: &str, key: &str) -> Result<()> {
     #[cfg(windows)]

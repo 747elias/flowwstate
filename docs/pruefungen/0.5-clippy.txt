@@ -1,0 +1,4 @@
+    Checking fm-ai v0.5.0 (/workspace/folder-mind/crates/fm-ai)
+    Checking fm-web v0.5.0 (/workspace/folder-mind/crates/fm-web)
+    Checking fm-app v0.5.0 (/workspace/folder-mind/crates/fm-app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.66s

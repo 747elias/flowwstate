@@ -96,11 +96,19 @@ pub async fn security(State(s): State<AppState>, request: Request, next: Next) -
         || path.starts_with("/api/setup")
         || path.starts_with("/api/ai/test")
         || path.starts_with("/api/backup")
-        || path.starts_with("/api/data/");
+        || path.starts_with("/api/data/")
+        || path.starts_with("/api/update")
+        || path == "/api/inbox/open"
+        || path.starts_with("/api/inbox/rules")
+        || path.starts_with("/api/inbox/examples")
+        || (request.method() != axum::http::Method::GET && path.starts_with("/api/agents"));
     if administrative && !admin {
         return(StatusCode::FORBIDDEN,"Einstellungen und Freigaben sind nur über http://127.0.0.1:8484 auf diesem Computer änderbar.").into_response();
     }
     if !matches!(request.method().as_str(), "GET" | "HEAD" | "OPTIONS") {
+        if s.updating.load(Ordering::Relaxed) && path != "/api/update/prepare" {
+            return (StatusCode::SERVICE_UNAVAILABLE,Json(json!({"error":"Das Update wird vorbereitet. Änderungen sind bis zum Neustart pausiert."}))).into_response();
+        }
         if request
             .headers()
             .get("x-csrf-token")
@@ -129,6 +137,9 @@ pub async fn security(State(s): State<AppState>, request: Request, next: Next) -
         "/api/login",
         "/anmeldung",
         "/app.js",
+        "/chat.js",
+        "/inbox.js",
+        "/agents.js",
         "/style.css",
         "/htmx.min.js",
         "/favicon.svg",
@@ -154,6 +165,9 @@ pub async fn security(State(s): State<AppState>, request: Request, next: Next) -
             "/api/browse/create",
             "/einrichtung",
             "/app.js",
+            "/chat.js",
+            "/inbox.js",
+            "/agents.js",
             "/style.css",
             "/htmx.min.js",
             "/favicon.svg",

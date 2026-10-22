@@ -5,6 +5,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use thiserror::Error;
+mod workflows;
+pub use workflows::*;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -166,6 +168,58 @@ impl Guard {
         fs::rename(from, to)?;
         Ok(())
     }
+    pub fn fingerprint(&self, path: impl AsRef<Path>) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        use std::io::Read;
+        let mut file = fs::File::open(self.resolve(path)?)?;
+        if !file.metadata()?.is_file() {
+            return Err(error("Eine reguläre Datei wird benötigt"));
+        }
+        let mut hash = Sha256::new();
+        let mut buffer = [0u8; 65536];
+        loop {
+            let size = file.read(&mut buffer)?;
+            if size == 0 {
+                break;
+            }
+            hash.update(&buffer[..size]);
+        }
+        Ok(format!("{:x}", hash.finalize()))
+    }
+    pub fn move_file(&self, from: &str, to: &str) -> Result<()> {
+        let _lock = self.lock.lock().map_err(error)?;
+        let from = self.resolve(from)?;
+        let to = self.resolve(to)?;
+        if !from.is_file() || to.exists() {
+            return Err(error("Quelldatei fehlt oder Ziel existiert bereits"));
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt;
+            use windows::{
+                Win32::Storage::FileSystem::{MOVE_FILE_FLAGS, MoveFileExW},
+                core::PCWSTR,
+            };
+            let from: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
+            let to: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
+            // Ohne REPLACE_EXISTING kann auch ein gleichzeitig angelegtes Ziel nicht überschrieben werden.
+            unsafe {
+                MoveFileExW(
+                    PCWSTR(from.as_ptr()),
+                    PCWSTR(to.as_ptr()),
+                    MOVE_FILE_FLAGS(0),
+                )
+                .map_err(error)?;
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            // Hardlink-Erstellung ist atomar und überschreibt niemals vorhandene Ziele.
+            fs::hard_link(&from, &to)?;
+            fs::remove_file(from)?;
+        }
+        Ok(())
+    }
     pub fn trash(&self, relative: impl AsRef<Path>, confirmed: bool) -> Result<()> {
         if !confirmed {
             return Err(error("Bitte Löschen bestätigen"));
@@ -209,6 +263,9 @@ pub struct Config {
     pub autostart: bool,
     pub work_start_hour: u8,
     pub work_end_hour: u8,
+    pub inbox_enabled: bool,
+    pub inbox_auto_sort: bool,
+    pub inbox_confidence: f32,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -236,6 +293,9 @@ impl Default for Config {
             autostart: false,
             work_start_hour: 0,
             work_end_hour: 24,
+            inbox_enabled: true,
+            inbox_auto_sort: true,
+            inbox_confidence: 0.9,
         }
     }
 }
@@ -277,6 +337,9 @@ impl Config {
                     "autostart",
                     "work_start_hour",
                     "work_end_hour",
+                    "inbox_enabled",
+                    "inbox_auto_sort",
+                    "inbox_confidence",
                 ],
             ),
             ("quality", vec!["allow_free_chat"]),
@@ -360,6 +423,7 @@ impl Config {
 pub fn initialize(guard: &Guard, config: &Config) -> Result<()> {
     for dir in [
         "unterlagen",
+        "input",
         "extrakte",
         "wissen",
         "chats",
@@ -481,6 +545,7 @@ pub enum DocumentStatus {
     WaitingApproval,
     Approved,
     Indexed,
+    Stored,
     Failed,
 }
 impl DocumentStatus {
@@ -494,6 +559,7 @@ impl DocumentStatus {
             "wartet_auf_freigabe" => Ok(Self::WaitingApproval),
             "freigegeben" => Ok(Self::Approved),
             "indiziert" => Ok(Self::Indexed),
+            "abgelegt" => Ok(Self::Stored),
             "fehlgeschlagen" => Ok(Self::Failed),
             _ => Err(error("Unbekannter Verarbeitungsstatus")),
         }
@@ -506,13 +572,13 @@ impl DocumentStatus {
                 (self, next),
                 (Found, WaitingStable | Checked)
                     | (WaitingStable, Checked)
-                    | (Checked, Extracted)
+                    | (Checked, Extracted | Stored)
                     | (Extracted, DraftCreated | Indexed)
                     | (DraftCreated, WaitingApproval)
                     | (WaitingApproval, Approved)
                     | (Approved, Indexed)
                     | (
-                        Indexed | Failed | Approved | WaitingApproval,
+                        Indexed | Stored | Failed | Approved | WaitingApproval,
                         Checked | Found | WaitingStable
                     )
             )
@@ -597,5 +663,22 @@ mod replace_tests {
             b"Zweiter Stand"
         );
         assert_eq!(fs::read_dir(t.path()).unwrap().count(), 1);
+    }
+    #[test]
+    fn moving_files_never_replaces_existing_data() {
+        let t = tempfile::tempdir().unwrap();
+        let g = Guard::new(t.path()).unwrap();
+        g.upload("source.bin", b"Quelle").unwrap();
+        g.upload("target.bin", b"Vorhandenes Original").unwrap();
+        assert!(g.move_file("source.bin", "target.bin").is_err());
+        assert!(g.move_file("source.bin", "../outside").is_err());
+        assert_eq!(
+            std::fs::read(g.resolve("target.bin").unwrap()).unwrap(),
+            b"Vorhandenes Original"
+        );
+        assert_eq!(g.fingerprint("source.bin").unwrap(), hash(b"Quelle"));
+        g.move_file("source.bin", "new.bin").unwrap();
+        assert!(!g.resolve("source.bin").unwrap().exists());
+        assert_eq!(g.fingerprint("new.bin").unwrap(), hash(b"Quelle"));
     }
 }

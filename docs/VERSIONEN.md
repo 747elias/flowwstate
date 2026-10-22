@@ -19,3 +19,7 @@ Office, Windows-OCR, semantische Suche, Lernkontext, Quellenarchiv, geprüfte Si
 ## 0.4.1 – Windows-Checkout und GitHub-Veröffentlichung
 
 Der vollständige Quellcode mit den bisherigen Versions-Tags liegt auf GitHub. `.gitattributes` verhindert die Zeilenendenkonvertierung binärer Dateien, die beim ersten Windows-Prüflauf die PDF-Beispieldatei beschädigt hat. Die Anwendung selbst bleibt funktional auf Stand 0.4. Der Release enthält die Windows-EXE und ihre SHA-256-Prüfsumme; der zugehörige native Windows-Prüflauf ist in den Release-Notizen verlinkt.
+
+## 0.5 – Eingangsablage, Agenten und datenerhaltendes Update
+
+Explorer-Ordner `input`, rekursive Dateiannahme, genaue `unzip.zip`-Regel mit erhaltenem Originalarchiv, automatische Regel-/KI-Zuordnung, Rückfragen, gelernte Beispiele und Verlauf mit Rücknahme. Chat mit seitlicher Agenten-/Gesprächsauswahl und sicherem Markdown. Ablage-Agent für Dateisuche und bestätigtes Verschieben, Agent-Builder, eigene Profile und eigenständiger Zusammenfasser. Datenbank-Migration mit Sicherung, Übernahme des bisherigen Datenordners und Update-Vorbereitung in der Web UI. Abnahme und Grenzen stehen in `ABNAHME-0.5.md`.

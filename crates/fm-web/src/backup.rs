@@ -28,13 +28,20 @@ fn archive_path(name: &str) -> Result<String> {
     Ok(format!("backups/{name}"))
 }
 fn allowed_path(p: &str) -> bool {
-    ["unterlagen/", "wissen/", "chats/", "extrakte/"]
-        .iter()
-        .any(|prefix| p.starts_with(prefix))
+    [
+        "unterlagen/",
+        "wissen/",
+        "chats/",
+        "extrakte/",
+        "input/",
+        "eingangsarchive/",
+    ]
+    .iter()
+    .any(|prefix| p.starts_with(prefix))
         || p == ".folder-mind/config.toml"
         || p == ".folder-mind/folder-mind.sqlite"
 }
-fn make(l: &Library) -> Result<String> {
+pub(crate) fn make(l: &Library) -> Result<String> {
     let _busy = l.processing.lock().map_err(error)?;
     make_locked(l)
 }
@@ -42,11 +49,23 @@ fn make_locked(l: &Library) -> Result<String> {
     let snapshot = format!("backups/.snapshot-{}.sqlite", uuid::Uuid::new_v4());
     l.catalog.snapshot(&l.guard, &snapshot)?;
     let mut files = Vec::new();
-    for dir in ["unterlagen", "wissen", "chats", "extrakte"] {
+    for dir in [
+        "unterlagen",
+        "wissen",
+        "chats",
+        "extrakte",
+        "input",
+        "eingangsarchive",
+    ] {
         walk(&l.guard, dir, &mut files)?;
     }
     files.push(".folder-mind/config.toml".into());
     files.push(".folder-mind/folder-mind.sqlite".into());
+    if files.len() > 9999 {
+        return Err(error(
+            "Die Sicherung enthält mehr als 9999 Dateien. Bitte den Bestand auf mehrere Datenordner verteilen.",
+        ));
+    }
     let mut manifest = Manifest {
         version: 1,
         files: BTreeMap::new(),
@@ -316,6 +335,8 @@ async fn change_data(
             "chats",
             "protokolle",
             "backups",
+            "input",
+            "eingangsarchive",
         ] {
             walk(&l.guard, dir, &mut files)?;
         }

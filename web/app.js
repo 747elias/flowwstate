@@ -76,14 +76,17 @@ function confirmAction(text) {
 }
 const pages = [
   ["/", "Start"],
+  ["/eingang", "Eingang"],
   ["/unterlagen", "Unterlagen"],
   ["/kapitel", "Kapitel"],
   ["/chat", "Chat"],
+  ["/agenten", "Agenten"],
   ["/suche", "Suche"],
   ["/warteschlange", "Warteschlange"],
   ["/einstellungen", "Einstellungen"],
   ["/sicherung", "Sicherung"],
   ["/protokoll", "Protokoll"],
+  ["/update", "Update"],
 ];
 function nav() {
   $("#nav").innerHTML = pages
@@ -258,6 +261,7 @@ async function search() {
 }
 async function render() {
   state = await api("/api/state");
+  $("#app-version").textContent = "v" + state.version;
   nav();
   if (state.login_required) {
     await loginPage();
@@ -278,6 +282,15 @@ async function render() {
       break;
     case "/suche":
       await search();
+      break;
+    case "/eingang":
+      await inboxPage();
+      break;
+    case "/agenten":
+      await agentsPage();
+      break;
+    case "/update":
+      await updatePage();
       break;
     case "/chat":
       await chatPage();
@@ -309,6 +322,10 @@ $("#theme").onclick = () => {
     "theme",
     document.documentElement.classList.contains("dark") ? "dark" : "light",
   );
+};
+$("#nav-toggle").onclick=()=>{
+  const open=document.body.classList.toggle("nav-open");
+  $("#nav-toggle").setAttribute("aria-expanded",String(open));
 };
 action(render);
 
@@ -390,183 +407,6 @@ function sourceLinks(sources) {
     )
     .join("<br>");
 }
-async function chatPage() {
-  const d = await api("/api/documents");
-  const history = await api("/api/chats");
-  let chatId = null,
-    historyMessages = [];
-  $("#content").innerHTML =
-    `<h1>Chat</h1><div class="grid"><label>Bereich<select id="scope"><option value="">Alle Unterlagen</option>${d.directories
-      .filter((p) => p !== "unterlagen")
-      .map((p) => `<option value="${esc(p)}">${esc(p)}</option>`)
-      .join(
-        "",
-      )}</select></label><label>Modus<select id="mode"><option value="erklaeren">Erklären</option><option value="zusammenfassen">Zusammenfassen</option><option value="abfragen">Abfragen</option>${state.allow_free_chat ? '<option value="frei">Freier Chat · ohne Unterlagen</option>' : ""}</select></label></div><details class="card"><summary>Gespeicherte Chats</summary><div id="chat-history"></div></details><div id="messages" class="messages"></div><form id="chat-form"><label>Deine Nachricht<textarea id="question" required></textarea></label><label><input id="save-chat" type="checkbox"> Verlauf speichern</label><button id="send">Senden</button></form>`;
-  for (const row of history.chats) {
-    const div = document.createElement("div");
-    div.className = "row";
-    div.append(
-      button(
-        row[1],
-        () => {
-          chatId = row[0];
-          historyMessages = history.messages
-            .filter((m) => m[0] === chatId)
-            .map((m) => ({ role: m[1], content: m[2] }));
-          $("#save-chat").checked = true;
-          $("#messages").innerHTML = history.messages
-            .filter((m) => m[0] === chatId)
-            .map((m) => {
-              const ids = JSON.parse(m[3]);
-              const sources = (history.sources || []).filter((c) =>
-                ids.includes(c.id),
-              );
-              let text = m[2];
-              sources.forEach((c, i) => {
-                text = text.split("[" + c.id + "]").join("[" + (i + 1) + "]");
-              });
-              return `<div class="card"><strong>${m[1] === "user" ? "Du" : "Folder-Mind"}</strong><div class="answer">${esc(text)}</div><p>${sourceLinks(sources)}</p></div>`;
-            })
-            .join("");
-        },
-        true,
-      ),
-      button(
-        "Umbenennen",
-        async () => {
-          const title = prompt("Neuer Titel", row[1]);
-          if (title) {
-            await api("/api/chats/action", {
-              id: row[0],
-              action: "rename",
-              title,
-            });
-            await chatPage();
-          }
-        },
-        true,
-      ),
-      button(
-        "Löschen",
-        async () => {
-          if (
-            await confirmAction("Diesen Chat in den Papierkorb verschieben?")
-          ) {
-            await api("/api/chats/action", {
-              id: row[0],
-              action: "delete",
-              confirmed: true,
-            });
-            await chatPage();
-          }
-        },
-        true,
-      ),
-    );
-    $("#chat-history").append(div);
-  }
-  const selectedChat = new URLSearchParams(location.search).get("chat");
-  if (selectedChat) {
-    const row = history.chats.find((r) => r[0] === selectedChat);
-    if (row) {
-      const button = [...$("#chat-history").querySelectorAll("button")].find(
-        (b) => b.textContent === row[1],
-      );
-      button?.click();
-    }
-  }
-  $("#chat-form").onsubmit = (e) => {
-    e.preventDefault();
-    action(async () => {
-      const question = $("#question").value;
-      $("#send").disabled = true;
-      const div = document.createElement("article");
-      div.className = "card";
-      div.innerHTML = `<strong>Du</strong><p>${esc(question)}</p><strong>Folder-Mind</strong><div class="answer"></div><p class="sources"></p>`;
-      $("#messages").append(div);
-      const answer = div.querySelector(".answer");
-      try {
-        const r = await fetch("/api/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-csrf-token": state.csrf,
-          },
-          body: JSON.stringify({
-            question,
-            scope: $("#scope").value,
-            mode: $("#mode").value,
-            chat_id: $("#save-chat").checked ? chatId : null,
-            history:
-              $("#save-chat").checked && chatId
-                ? []
-                : historyMessages.slice(-12),
-            save: $("#save-chat").checked,
-          }),
-        });
-        if (!r.ok) {
-          const j = await r.json();
-          throw Error(j.error || "Chat fehlgeschlagen");
-        }
-        const reader = r.body.getReader(),
-          decoder = new TextDecoder();
-        let buffer = "",
-          text = "",
-          sources = [];
-        while (true) {
-          const { value, done } = await reader.read();
-          buffer += decoder.decode(value || new Uint8Array(), {
-            stream: !done,
-          });
-          let pos;
-          while ((pos = buffer.indexOf("\n\n")) >= 0) {
-            const event = buffer.slice(0, pos);
-            buffer = buffer.slice(pos + 2);
-            const type = event
-              .split("\n")
-              .find((l) => l.startsWith("event:"))
-              ?.slice(6)
-              .trim();
-            const data = event
-              .split("\n")
-              .filter((l) => l.startsWith("data:"))
-              .map((l) => l.slice(5).trim())
-              .join("\n");
-            if (!data) continue;
-            const j = JSON.parse(data);
-            if (type === "sources") {
-              sources = j.sources;
-              if (j.free)
-                div.querySelector(".sources").textContent =
-                  "Freier Chat · ohne Unterlagenbezug";
-            }
-            if (type === "token") {
-              text += j.text;
-              answer.textContent = text;
-            }
-            if (type === "done") {
-              chatId = j.chat_id;
-              historyMessages.push(
-                { role: "user", content: question },
-                { role: "assistant", content: text },
-              );
-              sources.forEach((c, i) => {
-                text = text.split("[" + c.id + "]").join("[" + (i + 1) + "]");
-              });
-              answer.textContent = text;
-              if (sources.length)
-                div.querySelector(".sources").innerHTML = sourceLinks(sources);
-            }
-          }
-          if (done) break;
-        }
-        $("#question").value = "";
-      } finally {
-        $("#send").disabled = false;
-      }
-    });
-  };
-}
 async function chapterPage() {
   const d = await api("/api/documents");
   const dirs = d.directories.filter((x) => x !== "unterlagen");
@@ -622,7 +462,7 @@ async function loginPage() {
 async function documents() {
   const d = await api("/api/documents");
   $("#content").innerHTML =
-    `<h1>Unterlagen</h1><p>Die Ordner bestimmen die Zuordnung deiner Quellen. Originale werden nur auf deinen ausdrücklichen Auftrag verändert.</p><div class="card"><label>Zielordner<select id="folder-select">${d.directories.map((p) => `<option value="${esc(p)}" ${selectedPath === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></label><div class="row" id="folder-tools"></div><label>Dateien hochladen<input type="file" id="upload-files" multiple></label><div class="drop" id="drop-zone" tabindex="0">Dateien hier ablegen oder oben auswählen</div><p id="upload-status" role="status"></p></div><div class="card tree" id="folder-tree"></div>`;
+    `<h1>Unterlagen</h1><p>Die Ordner bestimmen die Zuordnung deiner Quellen. Hier verwaltest du deine Ablage. Neue Dateien kannst du im <a href="/eingang">Eingang automatisch zuordnen lassen</a>.</p><div class="card"><label>Zielordner<select id="folder-select">${d.directories.map((p) => `<option value="${esc(p)}" ${selectedPath === p ? "selected" : ""}>${esc(p)}</option>`).join("")}</select></label><div class="row" id="folder-tools"></div><label>Dateien hochladen<input type="file" id="upload-files" multiple></label><div class="drop" id="drop-zone" tabindex="0">Dateien hier ablegen oder oben auswählen</div><p id="upload-status" role="status"></p></div><div class="card tree" id="folder-tree"></div>`;
   const path = () => $("#folder-select").value;
   $("#folder-select").onchange = () => {
     selectedPath = path();
@@ -904,6 +744,7 @@ function comfortSettings(c, path) {
       true,
     ),
   );
+  inboxSettings(c);
   const section = document.createElement("section");
   section.className = "card";
   section.innerHTML = `<h2>Hintergrundbetrieb</h2><label><input id="autostart" type="checkbox" ${c.autostart ? "checked" : ""}> Beim Anmelden an Windows automatisch starten</label><div class="grid"><label>Verarbeitung ab Stunde (lokale Windows-Zeit)<input id="work-start" type="number" min="0" max="23" value="${c.work_start_hour}"></label><label>Verarbeitung bis Stunde (24 = Mitternacht)<input id="work-end" type="number" min="0" max="24" value="${c.work_end_hour}"></label></div><p>0 bis 24 bedeutet jederzeit. Ein Beginn nach dem Ende erlaubt ein Zeitfenster über Mitternacht.</p>`;
@@ -921,6 +762,9 @@ function comfortSettings(c, path) {
 function readComfortSettings(c) {
   return {
     ...c,
+    inbox_enabled: $("#inbox-enabled").checked,
+    inbox_auto_sort: $("#inbox-auto-sort").checked,
+    inbox_confidence: Number($("#inbox-confidence").value),
     autostart: $("#autostart").checked,
     work_start_hour: Number($("#work-start").value),
     work_end_hour: Number($("#work-end").value),

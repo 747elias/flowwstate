@@ -11,12 +11,16 @@
     />
     <link rel="stylesheet" href="/style.css" />
     <script src="/htmx.min.js" defer></script>
+    <script src="/chat.js" defer></script>
+    <script src="/inbox.js" defer></script>
+    <script src="/agents.js" defer></script>
     <script src="/app.js" defer></script>
   </head>
   <body>
     <header>
+      <button id="nav-toggle" class="secondary" aria-label="Menü öffnen" aria-expanded="false">☰</button>
       <a href="/">◈ Folder-Mind</a
-      ><button id="theme" title="Darstellung wechseln">Hell / Dunkel</button>
+      ><div class="row"><small id="app-version"></small><button id="theme" title="Darstellung wechseln">Hell / Dunkel</button></div>
     </header>
     <div class="layout">
       <nav id="nav"></nav>

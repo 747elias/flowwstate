@@ -1,4 +1,4 @@
-# Folder-Mind 0.4
+# Folder-Mind 0.5
 
 Folder-Mind verwaltet Lernunterlagen in einem lokalen Datenordner und bietet Volltextsuche, einen KI-Chat mit Quellen und überprüfbare Wissensentwürfe. Die deutsche Weboberfläche ist vollständig in der Programmdatei enthalten.
 
@@ -15,12 +15,26 @@ Die EXE ist nicht codesigniert. Windows oder betriebliche Richtlinien können de
 
 Im Infobereich von Windows befindet sich das Tray-Icon mit **Öffnen**, **Pause/Fortsetzen** und **Beenden**. Ohne Einrichtung führt jede Anwendungsseite zum Assistenten. Der Ort des Datenordners wird unter `%APPDATA%\folder-mind\data-dir.txt` gespeichert. Vor der Einrichtung werden keine Lernunterlagen geschrieben.
 
+## Update von 0.4.1 auf 0.5 ohne Datenverlust
+
+1. In der bisherigen Version bei Bedarf unter **Sicherung** eine Sicherung erstellen. Gewünschte Chatverläufe vorher speichern; nicht gespeicherte oder noch nicht abgesendete Eingaben sind keine Datenbankinhalte.
+2. Die bisherige Version über das Tray-Menü **Beenden** schliessen.
+3. Die neue `folder-mind.exe` herunterladen, die bisherige EXE ersetzen und die neue EXE mit demselben Windows-Benutzer starten.
+4. Folder-Mind übernimmt den bisherigen Datenordner automatisch. Der Assistent erscheint nicht erneut. Unterlagen, gespeicherte Chats, Notizen, Anbieter-Einstellungen und der Verweis auf den API-Key im Windows Credential Manager bleiben erhalten.
+
+Vor der Datenbank-Erweiterung werden die bisherige SQLite-Datenbank und die unveränderte Konfiguration automatisch als `backups/vor-update-*.sqlite` und `*.toml` gesichert. Die Migration läuft in einer Transaktion und entfernt keine bisherigen Tabellen oder Inhalte. Originaldateien werden dabei nicht verändert. Ein aktivierter Windows-Autostart wird auf die gestartete EXE aktualisiert.
+
+Ab 0.5 bietet **Update → Sichern & für Update beenden** denselben Ablauf mit einer vollständigen ZIP-Sicherung vor dem Beenden. Anschliessend die EXE austauschen und neu starten. Der Austausch der EXE allein löscht keine gespeicherten Nutzerdaten. Nach dem Update keine ältere EXE mit dem aktualisierten Datenordner starten. Bei Beständen über der ZIP-Sicherungsgrenze den vollständigen Datenordner vor dem Update zusätzlich im Explorer kopieren.
+
 ## Bedienung
 
 - **Start:** Dateizahl, offene Wissensfreigaben, Fehler und aktiver Datenordner.
+- **Eingang:** Explorer-Ordner öffnen, automatische Zuordnung beobachten, Rückfragen beantworten, Regeln und Beispiele einlernen und den Verschiebeverlauf prüfen.
 - **Unterlagen:** Zielordner wählen, Dateien auswählen oder hineinziehen; Ordner anlegen, umbenennen, leere Ordner löschen und Dateien verschieben. Löschen erfordert Bestätigung und verschiebt in `.papierkorb/`.
 - **Kapitel:** Entwurf erzeugen, prüfen und freigeben. Eigene Notizen werden separat gespeichert und bei der KI-Verarbeitung nicht überschrieben.
-- **Chat:** Bereich und Modus wählen. „Erklären“, „Zusammenfassen“ und „Abfragen“ arbeiten mit Unterlagen. „Freier Chat“ ist deutlich gekennzeichnet und kann in den Einstellungen deaktiviert werden. Gespeicherte Chats lassen sich öffnen, umbenennen und löschen. Nicht gespeicherte Chats behalten ihren Gesprächskontext nur im Browser.
+- **Chat:** Agent und Bereich wählen. Agenten und gespeicherte Gespräche stehen links, das Gespräch in der Mitte und die Eingabe unten. Antworten zeigen Markdown mit Überschriften, Listen, Tabellen, Code und anklickbaren Quellen. Neue Chats werden standardmässig gespeichert; die Auswahl kann abgeschaltet werden. Nicht gespeicherter Gesprächskontext bleibt nur im Browser.
+- **Agenten:** Erklärer, Ablage, Agent-Builder, Zusammenfasser, Lerntutor und freier Chat. Eigene Agenten lassen sich über den Builder entwerfen oder mit Name, Anweisungen, Quellenmodus und Standardbereich direkt erstellen, bearbeiten und löschen. Gespeicherte Chats bleiben beim Löschen eines Profils erhalten.
+- **Update:** Neue EXE herunterladen, Sicherung erstellen und die Anwendung zum Austauschen der EXE beenden.
 - **Suche:** Volltextsuche funktioniert ohne KI. Für semantische Suche ein Embedding-Modell einstellen und den semantischen Index aufbauen. Nach Dokumentänderungen kann dieser erneut aufgebaut werden; alte Vektoren werden bei der Suche nicht für neue Dateiversionen verwendet.
 - **Warteschlange:** Status und Fehler ansehen, pausieren, wiederholen oder den Volltextindex neu aufbauen.
 - **Einstellungen:** Datenordner, Vorlagen, ein bis vier Ebenennamen, Namensregeln, KI, Netzwerk, Dateigrösse, Zeitfenster, Freigabe und Autostart ändern.
@@ -28,6 +42,32 @@ Im Infobereich von Windows befindet sich das Tray-Icon mit **Öffnen**, **Pause/
 - **Protokoll:** Verarbeitungs- und Zugriffsprotokolle ansehen. Dateien liegen unter `<Datenordner>\protokolle\`.
 
 Die Vorlagen heissen **Lehre Informatik**, **Lehre allgemein**, **Schule** und **Frei**. Neue Ordner können automatisch Kleinbuchstaben und Bindestriche statt Leerzeichen verwenden. Die tatsächliche Ordnerstruktur bestimmt die Zuordnung; das Modell verschiebt keine Dateien.
+
+### Automatische Ablage im Input-Ordner
+
+Lege Dateien oder vollständige Ordner mit Unterordnern in `<Datenordner>\input\`. Die Hintergrundverarbeitung wartet auf stabile Dateien und berücksichtigt Dateiname, Ordnerkontext, bei unterstützten Formaten einen Textauszug sowie deine gespeicherten Regeln und Beispiele. Bei eindeutigem Ziel werden passende Ordner unter `unterlagen/` angelegt und die Dateien unverändert dorthin verschoben. Bestehende gleichnamige Dateien bleiben erhalten; neue Dateien erhalten bei Bedarf einen nummerierten Namen.
+
+Alle Dateitypen können abgelegt und nach Metadaten zugeordnet werden. Für Formate ohne Textextraktion stehen inhaltliche Suche, Zusammenfassung und Fragen zum Dateiinhalt nicht zur Verfügung; ihr Status lautet **abgelegt**. Für Zuordnungsausschnitte werden unterstützte Dateien bis 10 MB gelesen. Grössere Dateien können anhand von Metadaten und Regeln zugeordnet werden; die eingestellte Maximalgrösse für die anschliessende Textextraktion gilt weiterhin.
+
+- **Regeln:** Schlüsselwort und/oder Dateiendung mit Zielordner verknüpfen. Sind beide angegeben, müssen beide zutreffen. Widersprüchliche Ziele führen zu einer Rückfrage.
+- **KI-Hinweise:** Zusätzliche freie Anweisungen mit Zielordner speichern. Sie werden dem eingerichteten Modell bei der Zuordnung mitgegeben.
+- **Rückfragen:** Zielordner in der Web UI auswählen oder neu benennen und bestätigen. Optional die Zuordnung als Beispiel und ein Schlüsselwort als neue Regel merken. Ohne eingerichtetes Modell bleiben unklare Dateien für diese Entscheidung im Eingang.
+- **Lernen:** Bestätigte Beispiele bleiben lokal gespeichert; bis zu 30 der zuletzt bestätigten Beispiele werden künftigen KI-Anfragen mitgegeben. Identische Dateiinhalte können direkt anhand eines bestätigten Beispiels zugeordnet werden. Das Modell selbst wird nicht neu trainiert. Regeln und Beispiele können entfernt werden.
+- **Verlauf:** Quelle, Ziel, Zeitpunkt und Begründung bleiben gespeichert, auch nach einem Neustart. Unveränderte, automatisch abgelegte Dateien lassen sich von dort zurück in den Eingang legen. Sie warten dann auf eine neue Entscheidung.
+
+Automatisches Verschieben ist standardmässig aktiv und unter **Einstellungen → Automatische Eingangsablage** abschaltbar. Die KI-Sicherheitsschwelle beträgt standardmässig 0,9. Das ist eine Einschätzung des Modells, keine Garantie. Bei Unsicherheit oder einer Rückfrage wird nicht automatisch verschoben. KI-Aufrufe verwenden denselben Anbieter und dieselbe Cloud-Zustimmung wie der Chat und können Kosten verursachen.
+
+### ZIP-Regel
+
+Ausschliesslich Dateien mit dem **exakten, kleingeschriebenen Namen `unzip.zip` im Input-Ordner** werden automatisch entpackt. Das gilt auch für Unterordner. Andere Namen, beispielsweise `material.zip` oder `Unzip.zip`, bleiben ZIP-Dateien und werden als Datei zugeordnet.
+
+Das Originalarchiv bleibt unter `eingangsarchive/<Vorgang>/unzip.zip` erhalten. Entpackte Dateien durchlaufen dieselbe Zuordnung wie andere Eingänge. Absolute Pfade, `..`, Windows-Gerätenamen, Links, Spezialdateien und doppelte Pfade werden abgewiesen. Grenzen: 512 MB komprimiert und entpackt pro Archiv, höchstens 10.000 Einträge und drei verschachtelte ZIP-Ebenen. Bei einem Fehler bleibt das Original erhalten; die Web UI zeigt eine Rückfrage.
+
+### Dateiaktionen im Chat
+
+Der Agent **Ablage** beantwortet beispielsweise „Wo ist mein Netzwerk-Dokument gespeichert?“ oder „Verschiebe skript.pdf nach unterlagen/netzwerk“. Er arbeitet mit Dateilisten und bereitet typisierte Vorschläge vor. **Verschieben bestätigen** zeigt Quelle und Ziel und führt die Aktion erst nach deinem Klick aus. Eine zwischenzeitlich geänderte Datei wird abgewiesen. Der Agent erklärt keine Dokumentinhalte. Das Modell erhält weiterhin keine Dateisystem-Werkzeuge.
+
+Der **Agent-Builder** erstellt einen überprüfbaren Agentenentwurf. Erst **Agenten übernehmen** speichert das Profil; danach erscheint es in der Agentenauswahl. Für neue Profile und deren Bearbeitung ist der lokale Administrationszugang über 127.0.0.1 erforderlich.
 
 ### Verarbeitung und Quellen
 
@@ -52,7 +92,7 @@ Eine freigegebene Wissensseite benötigt einen gültigen Quellenbeleg. Die Markd
 
 Externe Anbieter benötigen HTTPS und eine ausdrückliche Zustimmung zur Übermittlung von Textausschnitten. Lokale Anbieter können HTTP verwenden. Der API-Key liegt ausschliesslich im **Windows Credential Manager** des angemeldeten Benutzers. Die Konfiguration enthält nur eine Referenz. Ein leeres Schlüsselfeld lässt den bisherigen Schlüssel unverändert; zum Entfernen gibt es eine eigene Auswahl. Bei einem Fehler des Credential Managers wird kein Klartext-Ersatz angelegt.
 
-Das Modell erhält ausgewählte Textabschnitte als unzuverlässige Daten und keine Dateisystem-Werkzeuge. Antworten mit Unterlagenbezug ohne gültigen Quellenbeleg werden verworfen. Fehlt schon bei der Suche eine passende Grundlage, erscheint die entsprechende deutsche Meldung ohne KI-Aufruf. KI-Aufträge für Chat, Entwürfe und Embeddings werden seriell ausgeführt.
+Das Modell erhält ausgewählte Textabschnitte als unzuverlässige Daten und keine Dateisystem-Werkzeuge. Antworten mit Unterlagenbezug ohne gültigen Quellenbeleg werden verworfen. Fehlt schon bei der Suche eine passende Grundlage, erscheint die entsprechende deutsche Meldung ohne KI-Aufruf. KI-Aufträge für Chat, Agent-Builder, Eingangszuordnung, Entwürfe und Embeddings werden seriell ausgeführt.
 
 ## Netzwerk, Passwort und MAC-Freigaben
 
@@ -72,6 +112,8 @@ Alle verändernden HTTP-Anfragen benötigen das CSRF-Token. Die Oberfläche läd
 
 ```text
 <Datenordner>/
+  input/            Eingangsdateien, auch verschachtelte Ordner
+  eingangsarchive/  unveränderte automatisch entpackte ZIP-Originale
   unterlagen/       Originale
   extrakte/         wiederherstellbare Extrakte mit Fundstellen
   wissen/           *.generated.md, *.notes.md, *.md
@@ -95,7 +137,7 @@ Beim Datenordnerwechsel können vorhandene Daten in einen leeren Zielordner kopi
 | Problem | Vorgehen |
 | --- | --- |
 | Browser öffnet nicht | Tray → Öffnen oder `http://127.0.0.1:8484` aufrufen. |
-| Port 8484 belegt | Eine bereits laufende Folder-Mind-Instanz wird geöffnet; bei einem anderen Programm dieses schliessen oder dessen Port ändern. |
+| Port 8484 belegt | Eine bereits laufende gleiche Version wird geöffnet. Bei einem Update die alte Version zuerst im Tray beenden. Bei einem anderen Programm dieses schliessen oder dessen Port ändern. |
 | Datenordner nicht verfügbar | Laufwerk/UNC-Verbindung wiederherstellen. Ein Startfehler erscheint als Windows-Meldung; die Daten werden nicht an einen anderen Ort geschrieben. |
 | Datei bleibt wartend | Kopiervorgang beenden und Stabilitätswartezeit abwarten. Pause und Zeitfenster kontrollieren. |
 | Extraktion fehlgeschlagen | Leserechte, Dateigrösse, Verschlüsselung und Format prüfen; anschliessend Warteschlange → Erneut verarbeiten. |
@@ -137,19 +179,20 @@ Die Versionsstände 0.1 bis 0.4 werden mit Release-Build, Tests und `cargo clipp
 
 Die Beispieldateien unter `tests/fixtures/` sind eigens erzeugt: PDF, TXT, Markdown, HTML und Office-Beispiele. Es werden keine fremden Unterrichtsunterlagen mitgeliefert.
 
-Die abschliessende Prüfübersicht und die fünf Abnahmekriterien aus Abschnitt 23 stehen in `docs/ABNAHME.md`. Native Windows-Laufzeittests werden dort von erfolgreichen Cross-Builds unterschieden.
+Die Erweiterungsprüfung steht unter [`docs/ABNAHME-0.5.md`](docs/ABNAHME-0.5.md). Die ursprüngliche Prüfübersicht und die fünf Abnahmekriterien aus Abschnitt 23 stehen in `docs/ABNAHME.md`. Native Windows-Laufzeittests werden dort von erfolgreichen Cross-Builds unterschieden.
 
 ## Abweichungen vom Konzept
 
 - **Geprüfte SSE-Ausgabe:** Die API des Anbieters wird per echtem SSE gelesen. Die Antwort wird vor der Anzeige vollständig gesammelt, auf gültige Quellen-IDs geprüft und gegen Schlüssel-Echos bereinigt. Erst danach liefert Folder-Mind SSE-Blöcke an den Browser. Damit werden unbestätigte Textteile nicht vorzeitig angezeigt; die Ausgabe beginnt entsprechend später.
 - **Schlankes Frontend ohne Build-Schritt:** HTML und htmx übernehmen Oberfläche/Statusabruf; Vanilla-JavaScript verarbeitet Assistent, Formulare, Upload und Fetch-SSE. Es gibt keine zusätzliche Frontend-Laufzeit und kein Node-Build-Erfordernis.
-- **Explizite KI-Entwürfe:** Die Dateiannahme führt nicht automatisch zu kostenpflichtigen KI-Aufrufen. Entwürfe werden über „Entwurf erstellen“ angefordert. Die optionale automatische Freigabe gilt für diese angeforderten, belegten Entwürfe.
-- **Begrenzter Modellkontext:** Chat-Retrieval nutzt bis zu acht, ein Wissensentwurf bis zu 24 Abschnitte. Für umfangreiche Themen kleinere Kapitelbereiche verwenden. Eine optionale Tokenverbrauchsanzeige ist nicht enthalten.
+- **Automatische Zuordnung auf ausdrücklichen Erweiterungsauftrag:** Ab Version 0.5 dürfen Eingangsdateien durch die geprüfte Backend-Ablage automatisch verschoben werden. Dies erweitert die ursprüngliche Abgrenzung aus Abschnitten 3, 5 und 20 des Konzepts. Das Modell selbst bleibt ohne Dateisystem-Werkzeuge; Aktionen an bereits abgelegten Dateien benötigen weiterhin eine ausdrückliche Chat-/Web-UI-Bestätigung.
+- **Explizite Wissensentwürfe:** Wissensentwürfe werden über „Entwurf erstellen“ angefordert. Automatische Eingangszuordnung kann dagegen KI-Aufrufe auslösen. Die optionale automatische Freigabe gilt für diese angeforderten, belegten Entwürfe.
+- **Begrenzter Modellkontext:** Chat-Retrieval nutzt bis zu acht, der Zusammenfasser eine über den Bereich verteilte Auswahl von bis zu 24, ein Wissensentwurf bis zu 24 Abschnitte. Für umfangreiche Themen kleinere Kapitelbereiche verwenden. Eine optionale Tokenverbrauchsanzeige ist nicht enthalten.
 - **ZIP-Grenze:** Erstellung und Prüfung von Sicherungen sind auf 512 MB unkomprimierten Inhalt und 10.000 Einträge begrenzt, um Speicherbedarf und ZIP-Bomben zu begrenzen. Grössere Bestände müssen auf Datenordner aufgeteilt werden.
 - **Zusammenführende Wiederherstellung:** Nicht im Archiv enthaltene zusätzliche Dateien werden erhalten. Die Vorschau macht das ausdrücklich sichtbar.
 - **Windows-Hintergrundbetrieb:** Tray und Benutzer-Autostart sind implementiert. Eine Installation als registrierter Windows-SCM-Dienst ist nicht enthalten.
 - **Notwendige Ausnahmen zum Datenordner:** Der Benutzerprofil-Zeiger, Credential-Manager-Einträge und der ausdrücklich aktivierte HKCU-Autostart liegen betriebssystembedingt ausserhalb des Datenordners. Beim Einrichten/Auswählen darf nach ausdrücklichem Auftrag ein neuer Zielordner angelegt werden. Normale Schreib-, Verschiebe- und Löschoperationen bleiben an den zentralen Pfadwächter gebunden.
-- **Prüfumgebung:** Die Lieferung wird unter Linux gebaut und getestet und zusätzlich für Windows MSVC crosskompiliert. Eine erfolgreiche native Windows-Ausführung, insbesondere von Tray, Credential Manager, OCR, Nachbartabelle und Autostart, wird damit nicht behauptet.
+- **Prüfumgebung:** Die Lieferung wird unter Linux gebaut und im Browser getestet; Windows-Build, automatisierte Tests und Clippy laufen zusätzlich nativ auf GitHub Actions. Interaktive Windows-Prüfungen von Tray, Credential Manager, OCR, Nachbartabelle und Autostart bleiben gesondert durchzuführen.
 
 ## Lizenz
 

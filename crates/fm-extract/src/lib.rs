@@ -2,6 +2,31 @@ mod ocr;
 mod office;
 use fm_core::{Chunk, Result, error};
 use std::path::Path;
+pub fn supported(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|s| {
+            matches!(
+                s.to_lowercase().as_str(),
+                "pdf"
+                    | "png"
+                    | "jpg"
+                    | "jpeg"
+                    | "bmp"
+                    | "tif"
+                    | "tiff"
+                    | "docx"
+                    | "pptx"
+                    | "xlsx"
+                    | "csv"
+                    | "html"
+                    | "htm"
+                    | "txt"
+                    | "md"
+            )
+        })
+}
 pub fn extract(path: &str, bytes: &[u8]) -> Result<Vec<Chunk>> {
     let ext = Path::new(path)
         .extension()

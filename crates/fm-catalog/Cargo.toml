@@ -7,5 +7,7 @@ license.workspace = true
 fm-core = { path = "../fm-core" }
 rusqlite.workspace = true
 serde_json.workspace = true
+serde.workspace = true
+uuid.workspace = true
 [dev-dependencies]
 tempfile.workspace = true

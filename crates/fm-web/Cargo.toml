@@ -26,5 +26,6 @@ serde_json.workspace = true
 rust-embed.workspace = true
 uuid.workspace = true
 tracing.workspace = true
+pulldown-cmark.workspace = true
 [dev-dependencies]
 tempfile.workspace = true

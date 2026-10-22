@@ -1,8 +1,12 @@
+mod agents;
 mod ai;
 mod backup;
+pub mod inbox;
+mod markdown;
 pub mod network;
 pub mod organization;
 mod semantic;
+mod update;
 use axum::{
     Json, Router,
     extract::{ConnectInfo, Query, Request, State},
@@ -37,6 +41,8 @@ pub struct AppState {
     pub network_error: Arc<RwLock<String>>,
     pub ai_jobs: Arc<tokio::sync::Semaphore>,
     pub shutdown: Arc<AtomicBool>,
+    pub inbox_jobs: Arc<tokio::sync::Semaphore>,
+    pub updating: Arc<AtomicBool>,
 }
 pub struct Library {
     pub guard: Guard,
@@ -50,6 +56,8 @@ impl Library {
     pub fn open(guard: Guard) -> Result<Self> {
         let config = Config::load(&guard)?;
         let catalog = fm_catalog::Catalog::open(&guard)?;
+        guard.mkdir("input")?;
+        guard.mkdir("eingangsarchive")?;
         let index = fm_index::SearchIndex::open(&guard)?;
         index.rebuild(&catalog.chunks()?)?;
         Ok(Self {
@@ -125,6 +133,11 @@ impl Library {
                 error: String::new(),
             };
             self.catalog.record(&d, &[])?;
+            if !fm_extract::supported(&relative) {
+                d.status = "abgelegt".into();
+                self.catalog.record(&d, &[])?;
+                continue;
+            }
             match fm_extract::extract(&relative, &bytes) {
                 Ok(chunks) => {
                     d.status = "extrahiert".into();
@@ -189,6 +202,8 @@ impl AppState {
             network_error: Arc::new(RwLock::new(String::new())),
             ai_jobs: Arc::new(tokio::sync::Semaphore::new(1)),
             shutdown: Arc::new(AtomicBool::new(false)),
+            inbox_jobs: Arc::new(tokio::sync::Semaphore::new(1)),
+            updating: Arc::new(AtomicBool::new(false)),
         })
     }
     pub fn lib(&self) -> Result<Arc<Library>> {
@@ -200,6 +215,7 @@ impl AppState {
     }
 }
 type ApiResult<T> = std::result::Result<T, ApiError>;
+#[derive(Debug)]
 pub struct ApiError(fm_core::Error);
 impl From<fm_core::Error> for ApiError {
     fn from(e: fm_core::Error) -> Self {
@@ -229,6 +245,9 @@ pub fn router(state: AppState) -> Router {
         .merge(organization::routes())
         .merge(backup::routes())
         .merge(semantic::routes())
+        .merge(agents::routes())
+        .merge(inbox::routes())
+        .merge(update::routes())
         .route("/api/state", get(state_info))
         .route("/api/setup", post(setup))
         .route("/api/browse", get(browse))

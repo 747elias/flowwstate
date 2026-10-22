@@ -97,6 +97,51 @@ async fn api_contract_errors_and_embeddings() {
     );
     task.abort();
 }
+
+#[tokio::test]
+async fn structured_proposals_redact_json_escaped_keys() {
+    async fn echo(h: HeaderMap) -> axum::response::Response {
+        let key = h
+            .get("authorization")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .strip_prefix("Bearer ")
+            .unwrap();
+        let content = json!({"message":key,"nested":[{"key":key}]}).to_string();
+        let event = json!({"choices":[{"delta":{"content":content}}]});
+        (
+            [("content-type", "text/event-stream")],
+            format!("data: {event}\n\ndata: [DONE]\n\n"),
+        )
+            .into_response()
+    }
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            Router::new().route("/v1/chat/completions", post(echo)),
+        )
+        .await
+        .unwrap();
+    });
+    let key = "mock-key-with\\backslash";
+    let client = Client::new(
+        Config {
+            base_url: format!("http://{addr}/v1"),
+            chat_model: "mock".into(),
+            ..Config::default()
+        },
+        key.into(),
+    )
+    .unwrap();
+    let result: Value = client.complete_json(vec![]).await.unwrap();
+    assert_eq!(result["message"], "[API-Key entfernt]");
+    assert_eq!(result["nested"][0]["key"], "[API-Key entfernt]");
+    assert!(!result.to_string().contains("backslash"));
+    server.abort();
+}
 #[test]
 fn cloud_consent_and_url() {
     assert!(fm_ai::validate_url("http://example.org/v1").is_err());

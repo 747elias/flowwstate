@@ -2,7 +2,7 @@
 members = ["crates/*"]
 resolver = "2"
 [workspace.package]
-version = "0.4.1"
+version = "0.5.0"
 edition = "2024"
 license = "MIT"
 rust-version = "1.88"
@@ -42,6 +42,7 @@ url = "=2.5.7"
 tempfile = "=3.23.0"
 windows = { version = "=0.61.3", features = ["Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_System_Registry", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_Foundation", "Media_Ocr", "Graphics_Imaging", "Storage", "Storage_Streams", "Foundation", "Globalization", "Data_Pdf", "Win32_System_WinRT", "Win32_System_SystemInformation", "Win32_Security"] }
 tray-icon = "=0.21.2"
+pulldown-cmark = { version = "=0.13.0", default-features = false, features = ["html"] }
 [profile.release]
 strip = true
 lto = "thin"

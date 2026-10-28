@@ -1,2 +1,0 @@
-    Checking fm-web v0.2.0 (/workspace/folder-mind/crates/fm-web)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.24s

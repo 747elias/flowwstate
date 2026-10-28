@@ -7,9 +7,8 @@ namespace Flowstate.App;
 public static class ThemeResources
 {
     static SolidColorBrush Brush(byte red, byte green, byte blue) => new(Color.FromArgb(255, red, green, blue));
-    public static ResourceDictionary Create()
+    public static void Initialize(ResourceDictionary resources)
     {
-        var resources = new ResourceDictionary();
         resources.MergedDictionaries.Add(new XamlControlsResources());
         var dark = new ResourceDictionary
         {
@@ -28,6 +27,5 @@ public static class ThemeResources
         resources["FlowAccent"] = Brush(139, 128, 255);
         resources["FlowSuccess"] = Brush(74, 203, 165);
         resources["FlowWarning"] = Brush(233, 170, 101);
-        return resources;
     }
 }

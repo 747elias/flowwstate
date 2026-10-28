@@ -36,6 +36,13 @@ jobs:
         run: |
           if (!(Test-Path artifacts/app/resources.pri)) { throw 'Missing application resource index' }
           Get-ChildItem artifacts/app/*.pri | Select-Object Name,Length
+      - name: Check published application startup
+        shell: pwsh
+        run: |
+          $app = Start-Process (Resolve-Path artifacts/app/Flowstate.App.exe) -PassThru
+          Start-Sleep -Seconds 10
+          if ($app.HasExited) { throw "Published app exited: $($app.ExitCode)" }
+          Stop-Process -Id $app.Id
       - name: Create installer
         shell: pwsh
         run: |

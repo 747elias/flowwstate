@@ -14,7 +14,7 @@ public partial class App : Application
         try
         {
             InitializeComponent();
-            Resources = ThemeResources.Create();
+            ThemeResources.Initialize(Resources);
             var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Flowstate");
             Directory.CreateDirectory(directory);
             Services = new ServiceCollection().AddSingleton(new Store(directory)).AddSingleton<UpdateService>().AddSingleton<MainViewModel>().BuildServiceProvider();

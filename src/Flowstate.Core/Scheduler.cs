@@ -9,7 +9,9 @@ public static class Scheduler
     public static List<TimeWindow> FreeWindows(IEnumerable<TimeWindow> windows, IEnumerable<CalendarBlock> busy)
     {
         var result = new List<TimeWindow>();
-        foreach (var w in windows.OrderBy(w => w.Start))
+        var ordered = windows.OrderBy(w => w.Start).ToList();
+        for (int i=1;i<ordered.Count;i++) if(ordered[i-1].End>ordered[i].Start) throw new ArgumentException("Verfügbarkeiten dürfen nicht überlappen.");
+        foreach (var w in ordered)
         {
             if (w.End <= w.Start) throw new ArgumentException("Das Ende muss nach dem Beginn liegen.");
             if (result.Count > 0 && result[^1].End > w.Start) throw new ArgumentException("Verfügbarkeiten dürfen nicht überlappen.");
@@ -44,7 +46,8 @@ public static class Scheduler
                     t.Dependencies.All(finished.ContainsKey))
                     .Select(t => new { Task = t, Start = new[] { cursor, t.NotBefore ?? cursor, t.Dependencies.Select(id => finished[id]).DefaultIfEmpty(cursor).Max() }.Max() })
                     .Where(x => x.Start < slot.End && (slot.End - x.Start).TotalMinutes >= (x.Task.Splittable ? Math.Min(remaining[x.Task.Id], x.Task.MinimumMinutes) : remaining[x.Task.Id]))
-                    .OrderByDescending(x => Score(x.Task, x.Start, previousProject)).ThenBy(x => x.Task.Created).ThenBy(x => x.Task.Id).ToList();
+                    .Where(x => !x.Task.Splittable || remaining[x.Task.Id] <= (slot.End-x.Start).TotalMinutes || remaining[x.Task.Id] >= x.Task.MinimumMinutes * 2)
+                    .OrderBy(x => x.Start).ThenByDescending(x => Score(x.Task, x.Start, previousProject)).ThenBy(x => x.Task.Created).ThenBy(x => x.Task.Id).ToList();
                 if (candidates.Count == 0) break;
                 var chosen = candidates[0]; var task = chosen.Task; cursor = chosen.Start;
                 var capacity = (int)Math.Floor((slot.End - cursor).TotalMinutes);

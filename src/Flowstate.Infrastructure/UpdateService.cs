@@ -11,7 +11,8 @@ public sealed class UpdateService
     public const string Repository = "747elias/flowwstate";
     readonly HttpClient client = new() { Timeout = TimeSpan.FromMinutes(10) };
     public UpdateService() { client.DefaultRequestHeaders.UserAgent.ParseAdd("Flowstate/0.1.0"); }
-    public static bool IsNewer(string current, string incoming) => NuGetVersion.TryParse(current.TrimStart('v'), out var c) && NuGetVersion.TryParse(incoming.TrimStart('v'), out var n) && !n.IsPrerelease && n > c;
+    public static string VersionText(string tag) => tag.StartsWith("flowstate-v",StringComparison.Ordinal) ? tag[11..] : tag.TrimStart('v');
+    public static bool IsNewer(string current, string incoming) => NuGetVersion.TryParse(VersionText(current), out var c) && NuGetVersion.TryParse(VersionText(incoming), out var n) && !n.IsPrerelease && n > c;
     public async Task<ReleaseInfo?> CheckAsync(string current, CancellationToken ct = default)
     {
         using var response = await client.GetAsync($"https://api.github.com/repos/{Repository}/releases/latest", ct);
@@ -23,7 +24,7 @@ public sealed class UpdateService
     public static bool TrustedAsset(string url, string tag) => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == "https" && u.Host == "github.com" && u.IsDefaultPort && string.IsNullOrEmpty(u.UserInfo) && string.IsNullOrEmpty(u.Query) && string.IsNullOrEmpty(u.Fragment) && u.AbsolutePath.StartsWith($"/{Repository}/releases/download/{Uri.EscapeDataString(tag)}/", StringComparison.Ordinal);
     public async Task<string> DownloadAsync(ReleaseInfo release, string cache, CancellationToken ct = default)
     {
-        if (!NuGetVersion.TryParse(release.Tag.TrimStart('v'), out var version) || version.IsPrerelease || release.Draft || release.Prerelease) throw new InvalidDataException("Ungültige stabile Version.");
+        if (!NuGetVersion.TryParse(VersionText(release.Tag), out var version) || version.IsPrerelease || release.Draft || release.Prerelease) throw new InvalidDataException("Ungültige stabile Version.");
         var name = $"Flowstate-Setup-{version.ToNormalizedString()}-win-x64.exe";
         var installer = release.Assets.Single(a=>a.Name == name); var checksum = release.Assets.Single(a=>a.Name == "SHA256SUMS.txt");
         if (!TrustedAsset(installer.Url, release.Tag) || !TrustedAsset(checksum.Url, release.Tag)) throw new InvalidDataException("Unerwartete Downloadquelle.");

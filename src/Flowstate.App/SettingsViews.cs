@@ -65,7 +65,7 @@ public sealed partial class MainWindow
         page.Children.Add(Card(Stack(Label("Daten & Privatsphäre",21),Muted(vm.Store.DatabasePath),Muted("Keine Telemetrie. Exporte und Backups enthalten deine persönlichen Daten im Klartext. Bewahre sie sicher auf."),Row(Button("Backup erstellen",async()=>{var path=await vm.Store.BackupAsync(vm.Data);Show($"Sicherung erstellt: {path}");}),Button("Exportieren",ExportDialog),Button("Import / Wiederherstellen",async()=>
         {
             var path=await PickFile([".json"]);if(path==null)return;if(!await Confirm("Daten wiederherstellen?","Der aktuelle Stand wird durch die gewählte Datei ersetzt. Vorher wird automatisch ein Backup erstellt."))return;vm.Data=await vm.Store.ImportAsync(path,vm.Data);ApplyTheme();Navigate(current);Show("Daten wiederhergestellt.");
-        })),Button("Aktuelle Daten löschen",async()=>{if(!await Confirm("Alle aktuellen Daten löschen?","Aufgaben, Kalender und Fokushistorie werden geleert. Eine Sicherung bleibt im Backup-Ordner erhalten."))return;await vm.Store.BackupAsync(vm.Data);vm.Data=new();await vm.SaveAsync();Navigate(current);} )));
+        })),Button("Aktuelle Daten löschen",async()=>{if(!await Confirm("Alle aktuellen Daten löschen?","Aufgaben, Kalender und Fokushistorie werden geleert. Eine Sicherung bleibt im Backup-Ordner erhalten."))return;await vm.Store.BackupAsync(vm.Data);vm.Data=new();await vm.SaveAsync();Navigate(current);} ))));
         page.Children.Add(Button("Jetzt nach Updates suchen",()=>CheckUpdates(true)));
     }
     async Task ExportDialog()
@@ -88,7 +88,7 @@ public sealed partial class MainWindow
     void AboutPage()
     {
         Header("Your time. Your focus. Your flow.","Flowstate",$"Version {AppVersion} · Windows x64 · Entwicklungsstand");
-        page.Children.Add(Card(Stack(Label("Lokal. Ruhig. In deinem Tempo.",23),Muted("WinUI 3 · .NET 10 · SQLite · Keine Registrierung · Keine Telemetrie"),Button("Quellcode auf GitHub",()=>OpenTarget($"https://github.com/{UpdateService.Repository}")),Button("Nach Updates suchen",async()=>{await CheckUpdates(true);Navigate(current);} )));
+        page.Children.Add(Card(Stack(Label("Lokal. Ruhig. In deinem Tempo.",23),Muted("WinUI 3 · .NET 10 · SQLite · Keine Registrierung · Keine Telemetrie"),Button("Quellcode auf GitHub",()=>OpenTarget($"https://github.com/{UpdateService.Repository}")),Button("Nach Updates suchen",async()=>{await CheckUpdates(true);Navigate(current);} ))));
         if(availableRelease is {} release)
         page.Children.Add(Card(Stack(Label($"Update {release.Tag}",22),Muted(release.Notes??""),Muted("Installer sind derzeit unsigniert. SHA-256 prüft die Integrität; eine Herausgebersignatur liegt nicht vor."),Button("Update herunterladen und installieren",async()=>
         {
@@ -97,6 +97,6 @@ public sealed partial class MainWindow
             string mode="/CURRENTUSER";using(var key=Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\Flowstate_is1")){if(key?.GetValue("InstallLocation") is string location && Path.GetFullPath(location).TrimEnd('\\').Equals(AppContext.BaseDirectory.TrimEnd('\\'),StringComparison.OrdinalIgnoreCase))mode="/ALLUSERS";}
             var info=new ProcessStartInfo(path) { UseShellExecute=true };info.ArgumentList.Add(mode);info.ArgumentList.Add("/DIR="+AppContext.BaseDirectory.TrimEnd('\\'));Process.Start(info);exiting=true;Close();
         },true))));
-        page.Children.Add(Card(Stack(Label("Status dieser Version",20),Muted("Implementiert: Aufgaben, Projekte, interne Kalenderagenda, AutoPlan-Vorschau mit Undo, Fokusprotokollierung, Noise-Mixer, Workspaces, Quick Capture, Auswertungen, lokale Backups und Update-Prüfung."),Muted("Noch offen: Kalender als Zeitraster mit Drag & Drop, vollständige Mehrsprachigkeit, erweiterte Serienregeln, Mehrfachauswahl, lizenzierte Naturklänge, automatische Fensteranordnung und vollständige Windows-11-Abnahme. Details im Entwicklungsstatus auf GitHub."))));
+        page.Children.Add(Card(Stack(Label("Status dieser Version",20),Muted("Implementiert: Aufgaben, Projekte, Tag-/Wochenraster und Monatskalender, AutoPlan-Vorschau mit Undo, Fokusprotokollierung, Noise-Mixer, Workspaces, Quick Capture, Auswertungen, lokale Backups und Update-Prüfung."),Muted("Noch offen: vollständige Mehrsprachigkeit, erweiterte Serienregeln, Mehrfachauswahl, lizenzierte Naturklänge, automatische Fensteranordnung und vollständige Windows-11-Abnahme. Details im Entwicklungsstatus auf GitHub."))));
     }
 }

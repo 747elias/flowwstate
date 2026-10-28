@@ -7,8 +7,8 @@ public partial class MainViewModel(Store store, UpdateService updates) : Observa
     public Store Store { get; } = store;
     public UpdateService Updates { get; } = updates;
     public AppData Data { get; set; } = new();
-    [ObservableProperty] private bool busy;
-    [ObservableProperty] private string status = "Alles lokal. Alles in deinem Tempo.";
+    [ObservableProperty] public partial bool Busy { get; set; }
+    [ObservableProperty] public partial string Status { get; set; } = "Alles lokal. Alles in deinem Tempo.";
     public async Task LoadAsync() { Busy = true; try { Data = await Store.LoadAsync(); } finally { Busy = false; } }
     public Task SaveAsync() => Store.SaveAsync(Data);
     public async Task CompleteAsync(TaskItem task)

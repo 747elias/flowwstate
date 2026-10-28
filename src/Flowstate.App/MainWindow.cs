@@ -47,7 +47,7 @@ public sealed partial class MainWindow : Window
         host.Children.Add(notice); var scroll=new ScrollViewer { Content=page, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled }; Grid.SetRow(scroll,1); host.Children.Add(scroll); nav.Content=host;
         Grid.SetRow(nav,1); root.Children.Add(nav); Content=root;
         nav.SelectionChanged+=(_,e)=> { if(ready && e.SelectedItem is NavigationViewItem i) Navigate(i.Tag.ToString()!); };
-        root.Loaded+=async (_,_)=> { if(ready)return; await Run(async()=> { await vm.LoadAsync(); ready=true; ApplyTheme(); native=new NativeIntegration(this,()=>Run(CaptureDialog), ()=>Navigate("Focus Studio")); native.Register(vm.Data.Settings.Hotkey); Navigate(vm.Data.Settings.StartPage); ticker.Start(); await CheckUpdates(false); }); };
+        root.Loaded+=async (_,_)=> { if(ready)return; await Run(async()=> { await vm.LoadAsync(); ready=true; ApplyTheme(); native=new NativeIntegration(this,()=> { _=Run(CaptureDialog); }, ()=>Navigate("Focus Studio")); native.Register(vm.Data.Settings.Hotkey); Navigate(vm.Data.Settings.StartPage); ticker.Start(); await CheckUpdates(false); }); };
         ticker.Tick+=async (_,_)=> { if(ticking || !ready)return; ticking=true; try { await Tick(); } catch(Exception e){ App.Log(e); Show(e.Message,true); } finally { ticking=false; } };
         AppWindow.Closing+=async (_,e)=>
         {
@@ -97,7 +97,7 @@ public sealed partial class MainWindow : Window
     {
         current=pages.Contains(destination)?destination:"Dashboard"; page.Children.Clear();timerText=null;timerProgress=null;
         var item=nav.MenuItems.Concat(nav.FooterMenuItems).OfType<NavigationViewItem>().First(i=>i.Tag.ToString()==current);
-        if(nav.SelectedItem!=item){nav.SelectedItem=item;return;}
+        if(!ReferenceEquals(nav.SelectedItem,item)){nav.SelectedItem=item;return;}
         switch(current)
         {
             case "Dashboard": Dashboard();break; case "Aufgaben": TasksPage();break; case "Projekte": ProjectsPage();break; case "Kalender": CalendarPage();break;

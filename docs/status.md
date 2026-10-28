@@ -1,6 +1,6 @@
 # Entwicklungsstatus und offene Abnahme
 
-Version: 0.1.0-beta.2. **Das Projekt erfüllt noch nicht alle Anforderungen der PDF und ist kein Stable Release.**
+Version: 0.1.0-beta.3. **Das Projekt erfüllt noch nicht alle Anforderungen der PDF und ist kein Stable Release.**
 
 | Bereich | Implementiert | Noch offen / Abnahme |
 |---|---|---|

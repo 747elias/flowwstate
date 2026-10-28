@@ -29,7 +29,11 @@ public sealed partial class MainWindow : Window
     readonly string[] pages = ["Dashboard", "Aufgaben", "Projekte", "Kalender", "AutoPlan", "Focus Studio", "Sound Studio", "Workspaces", "Analytics", "Tagesrückblick", "Einstellungen", "Über Flowstate"];
     public MainWindow(MainViewModel model)
     {
-        vm = model; Title = "Flowstate"; AppWindow.Resize(new SizeInt32(1320, 900));
+        vm = model; Title = "Flowstate";
+        var workArea=DisplayArea.GetFromWindowId(AppWindow.Id,DisplayAreaFallback.Primary).WorkArea;
+        var width=Math.Min(1320,Math.Max(400,workArea.Width-32));
+        var height=Math.Min(900,Math.Max(400,workArea.Height-32));
+        AppWindow.MoveAndResize(new RectInt32(workArea.X+(workArea.Width-width)/2,workArea.Y+(workArea.Height-height)/2,width,height));
         SystemBackdrop = new MicaBackdrop();
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Flowstate.ico"); if (File.Exists(iconPath)) AppWindow.SetIcon(iconPath);
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -84,7 +88,12 @@ public sealed partial class MainWindow : Window
     Button Button(string text, Func<Task> action, bool accent = false)
     {
         var b = new Button { Content = text, Padding = new Thickness(16, 10, 16, 10) };
-        if (accent) b.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
+        if (accent)
+        {
+            b.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
+            b.Background=Resource("FlowAccent");
+            b.Foreground=new SolidColorBrush(Colors.Black);
+        }
         b.Click += async (_, _) => { b.IsEnabled = false; try { await Run(action); } finally { b.IsEnabled = true; } }; return b;
     }
     Button Go(string text, string destination) => Button(text, () => { Navigate(destination); return Task.CompletedTask; });

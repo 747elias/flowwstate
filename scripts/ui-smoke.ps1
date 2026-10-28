@@ -30,3 +30,39 @@ foreach ($page in @('Aufgaben','Projekte','Kalender','AutoPlan','Focus Studio','
   Write-Output "Navigation OK: $page"
 }
 if ($null -eq (Find-Element 'Raum für das Wesentliche.')) { throw 'Dashboard content not rendered' }
+
+function Invoke-ByName([string]$name) {
+  $element=Find-Element $name
+  if ($null -eq $element) { throw "Missing action: $name" }
+  $pattern=$element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+  $pattern.Invoke()
+  Start-Sleep -Milliseconds 800
+}
+$tasks=Find-Element 'Aufgaben'
+$select=$null
+if ($tasks.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern,[ref]$select)) { $select.Select() }
+else { $tasks.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
+Start-Sleep -Milliseconds 500
+Invoke-ByName '+ Neue Aufgabe'
+$editCondition=[System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty,[System.Windows.Automation.ControlType]::Edit)
+$edit=$window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$editCondition)
+# The task-search input remains in the background. Select the editable Titel control from the dialog.
+$nameCondition=[System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty,'Titel')
+$both=[System.Windows.Automation.AndCondition]::new($editCondition,$nameCondition)
+$edit=$window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$both)
+if ($null -eq $edit) { throw 'Task title editor is not accessible' }
+$edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('CI-Aufgabe')
+Invoke-ByName 'Speichern'
+if ($null -eq (Find-Element 'CI-Aufgabe')) { throw 'Created task was not rendered' }
+Write-Output 'Task creation through UI OK'
+$focus=Find-Element 'Focus Studio'
+$select=$null
+if ($focus.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern,[ref]$select)) { $select.Select() }
+else { $focus.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
+Start-Sleep -Milliseconds 500
+Invoke-ByName 'Fokus starten'
+Invoke-ByName 'Pausieren'
+Invoke-ByName 'Fortsetzen'
+Invoke-ByName 'Beenden & speichern'
+if ($null -eq (Find-Element 'Fokus starten')) { throw 'Timer did not return to ready state' }
+Write-Output 'Focus start/pause/resume/stop through UI OK'

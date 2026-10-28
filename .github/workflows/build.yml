@@ -67,6 +67,12 @@ jobs:
         with:
           name: windows-screenshots
           path: artifacts/screenshots
+      - name: Print startup diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem "$env:LOCALAPPDATA/Flowstate/Logs" -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_.FullName }
+          Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'Flowstate' } | Select-Object -First 5 | Format-List TimeCreated,Id,Message
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

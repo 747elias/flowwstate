@@ -20,3 +20,14 @@ Windows-CI: native WinUI-Veröffentlichung, Inno-Installer, Installation per `/C
 - Startzeit, RAM/CPU und große Datenbestände: noch keine gemessenen Benchmarks.
 
 Es werden keine manuellen Tests oder Performancezahlen als durchgeführt ausgewiesen, wenn dafür kein Nachweis vorliegt.
+
+## Gemessene AutoPlan-Laufzeit
+
+28.10.2026, Linux-Entwicklungscontainer, Debian 13, .NET 10.0.14, Release-Build. Ein Aufwärmlauf, anschließend 10 Wiederholungen, 14 verfügbare Tage à 8 Stunden, 5-Minuten-Pausen. Keine Aussage zur Windows-UI-Leistung.
+
+| Aufgaben | Median (ms) | Min–Max (ms) | Erzeugte Blöcke | Restliche Aufgaben |
+|---|---:|---:|---:|---:|
+| 100 | 10,83 | 9,48–20,10 | 199 | 5 |
+| 1000 | 68,13 | 42,68–99,23 | 275 | 867 |
+
+Reproduzieren: `dotnet run --project tools/Flowstate.Benchmarks -c Release`. Die große Restmenge im zweiten Fall entsteht durch die begrenzte Zeitkapazität. Messwerte sind maschinenabhängig.

@@ -4,7 +4,7 @@
 
 Native, lokale Windows-11-Produktivitätsanwendung mit WinUI 3. Implementiert anhand des bereitgestellten Flowstate-Konzepts. Der Repository-Name `flowwstate` ist der vorhandene Name auf GitHub.
 
-**Entwicklungsstand 0.1.0-beta.1 – keine Stable-Version.** Der vollständige PDF-Funktionsumfang ist noch nicht abgenommen. Die genaue Abgrenzung steht in [docs/status.md](docs/status.md).
+**Entwicklungsstand 0.1.0-beta.2 – keine Stable-Version.** Der vollständige PDF-Funktionsumfang ist noch nicht abgenommen. Die genaue Abgrenzung steht in [docs/status.md](docs/status.md).
 
 ## Installation
 

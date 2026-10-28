@@ -48,7 +48,9 @@ public sealed partial class MainWindow : Window
         host.Children.Add(notice); var scroll = new ScrollViewer { Content = page, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }; Grid.SetRow(scroll, 1); host.Children.Add(scroll); nav.Content = host;
         Grid.SetRow(nav, 1); root.Children.Add(nav); Content = root;
         nav.SelectionChanged += (_, e) => { if (ready && e.SelectedItem is NavigationViewItem i) Navigate(i.Tag.ToString()!); };
-        root.Loaded += async (_, _) => { if (ready) return; await Run(async () => { await vm.LoadAsync(); ready = true; ApplyTheme(); native = new NativeIntegration(this, () => { _ = Run(CaptureDialog); }, () => Navigate("Focus Studio")); native.Register(vm.Data.Settings.Hotkey); Navigate(vm.Data.Settings.StartPage); ticker.Start(); await CheckUpdates(false); }); };
+        root.Loaded += async (_, _) => { if (ready) return; await Run(async () => { await vm.LoadAsync(); ready = true; ApplyTheme(); Navigate(vm.Data.Settings.StartPage); ticker.Start();
+            try { native = new NativeIntegration(this, () => { _ = Run(CaptureDialog); }, () => Navigate("Focus Studio")); native.Register(vm.Data.Settings.Hotkey); }
+            catch(Exception e) { vm.Data.Settings.MinimizeToTray=false;App.Log(e);Show("Windows-Infobereich nicht verfügbar. Das Fenster beendet die App beim Schließen.",true); } await CheckUpdates(false); }); };
         ticker.Tick += async (_, _) => { if (ticking || !ready) return; ticking = true; try { await Tick(); } catch (Exception e) { App.Log(e); Show(e.Message, true); } finally { ticking = false; } };
         AppWindow.Closing += async (_, e) =>
         {
@@ -65,9 +67,15 @@ public sealed partial class MainWindow : Window
     {
         root.RequestedTheme = vm.Data.Settings.Theme switch { "Light" => ElementTheme.Light, "System" => ElementTheme.Default, _ => ElementTheme.Dark };
         Application.Current.Resources["FlowAccent"] = new SolidColorBrush(ParseColor(vm.Data.Settings.Accent));
+        Application.Current.Resources["SystemAccentColor"]=ParseColor(vm.Data.Settings.Accent);
     }
     static Windows.UI.Color ParseColor(string value) { try { return Windows.UI.Color.FromArgb(255, Convert.ToByte(value[1..3], 16), Convert.ToByte(value[3..5], 16), Convert.ToByte(value[5..7], 16)); } catch { return Windows.UI.Color.FromArgb(255, 139, 128, 255); } }
-    Brush Resource(string key) => (Brush)Application.Current.Resources[key];
+    Brush Resource(string key)
+    {
+        var resources=Application.Current.Resources;
+        var theme=(ResourceDictionary)resources.ThemeDictionaries[root.ActualTheme==ElementTheme.Light?"Light":"Dark"];
+        return (Brush)(theme.ContainsKey(key)?theme[key]:resources[key]);
+    }
     TextBlock Label(string text, double size = 14) => new() { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
     TextBlock Muted(string text, double size = 13) { var t = Label(text, size); t.Foreground = Resource("MutedForeground"); return t; }
     StackPanel Stack(params UIElement[] children) { var p = new StackPanel { Spacing = 12 }; foreach (var c in children) p.Children.Add(c); return p; }
@@ -93,7 +101,23 @@ public sealed partial class MainWindow : Window
     async Task<bool> Confirm(string title, string description)
     { var d = new ContentDialog { XamlRoot = root.XamlRoot, Title = title, Content = description, PrimaryButtonText = "Bestätigen", CloseButtonText = "Abbrechen", DefaultButton = ContentDialogButton.Close, RequestedTheme = root.ActualTheme }; return await d.ShowAsync() == ContentDialogResult.Primary; }
     async Task<bool> Edit(string title, StackPanel fields, string primary = "Speichern")
-    { var d = new ContentDialog { XamlRoot = root.XamlRoot, Title = title, Content = new ScrollViewer { Content = fields, MaxHeight = 580 }, PrimaryButtonText = primary, CloseButtonText = "Abbrechen", DefaultButton = ContentDialogButton.Primary, RequestedTheme = root.ActualTheme }; return await d.ShowAsync() == ContentDialogResult.Primary; }
+    {
+        var validation=new InfoBar { IsOpen=false,Severity=InfoBarSeverity.Error,IsClosable=false };fields.Children.Insert(0,validation);
+        var d = new ContentDialog { XamlRoot = root.XamlRoot, Title = title, Content = new ScrollViewer { Content = fields, MaxHeight = 580 }, PrimaryButtonText = primary, CloseButtonText = "Abbrechen", DefaultButton = ContentDialogButton.Primary, RequestedTheme = root.ActualTheme };
+        IEnumerable<UIElement> Descendants(UIElement element)
+        {
+            yield return element;
+            if(element is Panel panel)foreach(var child in panel.Children)foreach(var item in Descendants(child))yield return item;
+        }
+        d.PrimaryButtonClick+=(_,e)=>
+        {
+            var all=Descendants(fields).ToArray();
+            var empty=all.OfType<TextBox>().FirstOrDefault(t=>(t.Header?.ToString() is "Titel" or "Name") && string.IsNullOrWhiteSpace(t.Text));
+            var invalid=all.OfType<NumberBox>().FirstOrDefault(n=>double.IsNaN(n.Value)||n.Value<n.Minimum||n.Value>n.Maximum);
+            if(empty!=null || invalid!=null){e.Cancel=true;validation.Message=empty!=null?"Bitte einen Titel bzw. Namen eingeben.":"Bitte eine Zahl im erlaubten Bereich eingeben.";validation.IsOpen=true;}
+        };
+        return await d.ShowAsync() == ContentDialogResult.Primary;
+    }
     void Navigate(string destination)
     {
         current = pages.Contains(destination) ? destination : "Dashboard"; page.Children.Clear(); timerText = null; timerProgress = null;

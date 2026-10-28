@@ -53,6 +53,7 @@ jobs:
           Start-Sleep -Seconds 15
           if ($app.HasExited) { throw "App exited during launch: $($app.ExitCode)" }
           if (!(Test-Path "$env:LOCALAPPDATA\Flowstate\flowstate.db")) { throw 'Database was not created' }
+          & ./scripts/ui-smoke.ps1 -AppProcessId $app.Id
           Stop-Process -Id $app.Id
           $un = Start-Process "$target\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru -Wait
           if ($un.ExitCode -ne 0) { throw 'Uninstall failed' }
@@ -61,6 +62,11 @@ jobs:
         with:
           name: Flowstate-Windows-x64
           path: artifacts/installer/*
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-screenshots
+          path: artifacts/screenshots
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

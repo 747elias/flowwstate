@@ -6,7 +6,7 @@ Die xUnit-Suite prüft Priorität/Deadline, geschützte Termine, volle Kalender,
 
 Lokaler Lauf: `dotnet test tests/Flowstate.Tests -c Release`. Ergebnisse werden zusätzlich als TRX-Artefakt in GitHub Actions gespeichert.
 
-Windows-CI: native WinUI-Veröffentlichung, Inno-Installer, Installation per `/CURRENTUSER`, Prozessstart, Datenbank-Erstellung, Deinstallation und Erhalt der Benutzerdaten. Diese Prüfungen sind erst nach grünen zugehörigen Schritten als bestanden zu werten. CI-Runner ist Windows Server, keine manuelle Windows-11-Abnahme.
+Windows-CI: native WinUI-Veröffentlichung, Inno-Installer, Installation per `/CURRENTUSER`, Prozessstart, Datenbank-Erstellung, Navigation durch alle 12 Seiten via UI Automation, Dashboard-Inhaltsprüfung und Screenshot, Deinstallation und Erhalt der Benutzerdaten. Diese Prüfungen sind erst nach grünen zugehörigen Schritten als bestanden zu werten. CI-Runner ist Windows Server, keine manuelle Windows-11-Abnahme.
 
 ## Noch manuell auf Windows 11 erforderlich
 

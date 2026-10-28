@@ -10,6 +10,7 @@ public sealed partial class MainWindow
 {
     async Task StartFocus(Guid? taskId, int minutes, bool isBreak = false, bool stopwatch = false)
     {
+        if(minutes<1 || minutes>1440)throw new ArgumentException("Die Fokusdauer muss zwischen 1 und 1440 Minuten liegen.");
         if (vm.Data.ActiveTimer != null)
         {
             if (!await Confirm("Laufende Sitzung beenden?", "Die bisherige Fokuszeit wird gespeichert.")) return;
@@ -24,7 +25,8 @@ public sealed partial class MainWindow
     async Task Tick()
     {
         var t = vm.Data.ActiveTimer; if (t == null) return; var now = DateTimeOffset.UtcNow;
-        if (timerText != null) timerText.Text = TimeSpan.FromSeconds(Math.Floor(t.Stopwatch ? t.Elapsed(now) : t.Remaining(now))).ToString(t.Elapsed(now) >= 3600 ? @"hh\:mm\:ss" : @"mm\:ss");
+        var displayed=t.Stopwatch?t.Elapsed(now):t.Remaining(now);
+        if(timerText!=null)timerText.Text=TimeSpan.FromSeconds(Math.Floor(displayed)).ToString(displayed>=3600?@"hh\:mm\:ss":@"mm\:ss");
         if (timerProgress != null) timerProgress.Value = Math.Min(100, t.Elapsed(now) / Math.Max(1, t.TargetSeconds) * 100);
         if (t.Running && t.Finished(now))
         {

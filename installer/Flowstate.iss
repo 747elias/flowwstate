@@ -1,5 +1,5 @@
 #ifndef AppVersion
-#define AppVersion "0.1.0-beta.1"
+#define AppVersion "0.1.0-beta.2"
 #endif
 [Setup]
 AppId=Flowstate

@@ -11,7 +11,7 @@ public sealed class NativeIntegration : IDisposable
         this.window = window; this.capture = capture; this.focus = focus; hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window); callback = WndProc;
         if (!SetWindowSubclass(hwnd, callback, 1, 0)) throw new InvalidOperationException("Windows-Fensterintegration konnte nicht initialisiert werden.");
         icon = new NotifyData { cbSize = (uint)Marshal.SizeOf<NotifyData>(), hWnd = hwnd, uID = 1, uFlags = 7, uCallbackMessage = Callback, hIcon = LoadImage(0, Path.Combine(AppContext.BaseDirectory, "Assets", "Flowstate.ico"), 1, 0, 0, 0x10 | 0x40), szTip = "Flowstate", szInfo = "", szInfoTitle = "" };
-        if (!Shell_NotifyIcon(0, ref icon)) throw new InvalidOperationException("Infobereich konnte nicht initialisiert werden.");
+        if (!Shell_NotifyIcon(0, ref icon)) { RemoveWindowSubclass(hwnd,callback,1); if(icon.hIcon!=0)DestroyIcon(icon.hIcon);throw new InvalidOperationException("Infobereich konnte nicht initialisiert werden."); }
     }
     public void Register(uint key)
     {

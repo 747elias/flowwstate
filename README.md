@@ -6,6 +6,10 @@ Native, lokale Windows-11-Produktivitätsanwendung mit WinUI 3. Implementiert an
 
 **Entwicklungsstand 0.1.0-beta.3 – keine Stable-Version.** Der vollständige PDF-Funktionsumfang ist noch nicht abgenommen. Die genaue Abgrenzung steht in [docs/status.md](docs/status.md).
 
+![Flowstate im Windows-Test](docs/screenshots/dashboard.png)
+
+Echter Screenshot der installierten App aus der Windows-CI bei kleiner Bildschirmauflösung.
+
 ## Installation
 
 Windows 11 x64. [Releases](https://github.com/747elias/flowwstate/releases) enthalten nach erfolgreicher Veröffentlichung `Flowstate-Setup-<Version>-win-x64.exe` und `SHA256SUMS.txt`.

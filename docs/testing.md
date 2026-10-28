@@ -1,5 +1,21 @@
 # Testnachweise
 
+## Verifizierter Stand: 0.1.0-beta.3
+
+[Erfolgreicher Windows-/Linux-Lauf](https://github.com/747elias/flowwstate/actions/runs/40702677299), Quellcode-Commit `4ce25f67337d779d18d42dd08b2d01ec1e37cb4f`.
+
+- 46 xUnit-Tests bestanden, keine fehlgeschlagen oder übersprungen.
+- Native WinUI-App self-contained gebaut; Ressourcenpaket geprüft; veröffentlichte App gestartet.
+- Inno-Installer erstellt, per-user installiert, installierte App gestartet, SQLite-Datei vorhanden.
+- UI Automation: alle 12 Navigationsbereiche geöffnet und Dashboard-Inhalt geprüft.
+- Aufgabe über den Task-Editor erstellt und in der Aufgabenliste nachgewiesen.
+- Fokus über die Oberfläche gestartet, pausiert, fortgesetzt und mit Speicherung beendet.
+- Deinstallation erfolgreich; lokale Datenbank bleibt erhalten.
+- Installer vom veröffentlichten Release heruntergeladen und SHA-256 gegen Release-Datei erfolgreich geprüft.
+- Echtes Dashboard-Bild: `docs/screenshots/dashboard.png`.
+
+Installer: `Flowstate-Setup-0.1.0-beta.3-win-x64.exe`, 74.063.282 Bytes, unsigniert. Diese automatisierten Prüfungen erfolgten auf GitHub Windows Server, nicht als manuelle Windows-11-Abnahme.
+
 ## Automatisiert
 
 Die xUnit-Suite prüft Priorität/Deadline, geschützte Termine, volle Kalender, Teilbarkeit/Mindestfragmente, Startzeit, Kontext, Energie, Abhängigkeiten/Zyklen, Pausen, vorhandene Planung, Sommerzeit/Sonderzeiten, Serienaufgaben, Eingabeerkennung, Timer, SemVer und Downloadherkunft. SQLite-Tests prüfen echte Dateien und Migrationen, CRUD/Beziehungen, Fokus/Kalender, Export/Backup/Wiederherstellung sowie Ablehnung ungültiger Imports ohne Datenverlust.

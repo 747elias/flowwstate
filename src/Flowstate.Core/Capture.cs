@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 namespace Flowstate.Core;
+
 public static partial class Capture
 {
     [GeneratedRegex(@"(?:für\s+)?(\d{1,4})\s*(?:minuten|min|m)\b", RegexOptions.IgnoreCase)] private static partial Regex Duration();

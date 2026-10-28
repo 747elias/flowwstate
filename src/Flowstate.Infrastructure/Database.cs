@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Flowstate.Core;
 namespace Flowstate.Infrastructure;
+
 public class SettingRow { public int Id { get; set; } = 1; public string Json { get; set; } = "{}"; }
 public class Database(string path) : DbContext
 {

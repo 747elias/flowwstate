@@ -3,7 +3,7 @@ namespace Flowstate.Core;
 public enum TaskStatus { Inbox, Todo, InProgress, Completed, OnHold, Cancelled }
 public enum Priority { Urgent, High, Medium, Low }
 public enum Energy { Low, Medium, High }
-public enum Repeat { None, Daily, Weekly, Monthly, Yearly }
+public enum Repeat { None, Daily, Weekly, Monthly, Yearly, CustomDays }
 public enum BlockKind { Event, Manual, AutoPlan, Break }
 public class TaskItem
 {
@@ -24,6 +24,8 @@ public class TaskItem
     public int MinimumMinutes { get; set; } = 15;
     public Energy Energy { get; set; } = Energy.Medium;
     public Repeat Repeat { get; set; }
+    public int RepeatIntervalDays { get; set; } = 2;
+    public Guid? NextOccurrenceId { get; set; }
     public bool Archived { get; set; }
     public List<string> Tags { get; set; } = [];
     public List<string> Contexts { get; set; } = [];
@@ -34,17 +36,19 @@ public class TaskItem
     {
         if (string.IsNullOrWhiteSpace(Title) || Title.Length > 500) throw new ArgumentException("Der Titel muss 1–500 Zeichen enthalten.");
         if (Minutes is < 1 or > 10080 || MinimumMinutes < 1 || MinimumMinutes > Minutes) throw new ArgumentException("Dauer und Mindestdauer sind ungültig.");
+        if (RepeatIntervalDays is < 1 or > 3650) throw new ArgumentException("Wiederholungsintervall muss zwischen 1 und 3650 Tagen liegen.");
         if (Dependencies.Contains(Id)) throw new ArgumentException("Eine Aufgabe kann nicht von sich selbst abhängen.");
     }
     public TaskItem? Complete(DateTimeOffset now)
     {
         if (Status == TaskStatus.Completed) return null;
         Status = TaskStatus.Completed; CompletedAt = now; Updated = now;
-        if (Repeat == Repeat.None) return null;
+        if (Repeat == Repeat.None || NextOccurrenceId.HasValue) return null;
         var date = Due ?? now;
-        DateTimeOffset Next(DateTimeOffset d) => Repeat switch { Repeat.Daily => d.AddDays(1), Repeat.Weekly => d.AddDays(7), Repeat.Monthly => d.AddMonths(1), _ => d.AddYears(1) };
+        DateTimeOffset Next(DateTimeOffset d) => Repeat switch { Repeat.Daily => d.AddDays(1), Repeat.Weekly => d.AddDays(7), Repeat.Monthly => d.AddMonths(1), Repeat.CustomDays => d.AddDays(RepeatIntervalDays), _ => d.AddYears(1) };
         do { date = Next(date); } while (date <= now);
-        return new TaskItem { Title = Title, Description = Description, ProjectId = ProjectId, Priority = Priority, Minutes = Minutes, MinimumMinutes = MinimumMinutes, Splittable = Splittable, Energy = Energy, Repeat = Repeat, Due = date, Status = TaskStatus.Todo, Tags = [..Tags], Contexts = [..Contexts], Checklist = [..Checklist] };
+        var next = new TaskItem { Title = Title, Description = Description, ProjectId = ProjectId, Priority = Priority, Minutes = Minutes, MinimumMinutes = MinimumMinutes, Splittable = Splittable, Energy = Energy, Repeat = Repeat, Due = date, Status = TaskStatus.Todo, Tags = [.. Tags], Contexts = [.. Contexts], Checklist = [.. Checklist], RepeatIntervalDays = RepeatIntervalDays };
+        NextOccurrenceId = next.Id; return next;
     }
 }
 public class Project

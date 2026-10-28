@@ -2,6 +2,7 @@ using System.Text.Json;
 using Flowstate.Core;
 using Microsoft.EntityFrameworkCore;
 namespace Flowstate.Infrastructure;
+
 public sealed class Store(string directory)
 {
     public string DirectoryPath { get; } = directory;
@@ -15,7 +16,18 @@ public sealed class Store(string directory)
         {
             Directory.CreateDirectory(DirectoryPath);
             await using var db = new Database(DatabasePath);
-            await db.Database.EnsureCreatedAsync();
+            var pending = await db.Database.GetPendingMigrationsAsync();
+            if (pending.Any())
+            {
+                if (File.Exists(DatabasePath) && new FileInfo(DatabasePath).Length > 0)
+                {
+                    var folder = Path.Combine(DirectoryPath, "Backups"); Directory.CreateDirectory(folder);
+                    using var source = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={DatabasePath}");
+                    using var target = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(folder, $"before-migration-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}.db")}");
+                    source.Open(); target.Open(); source.BackupDatabase(target);
+                }
+                await db.Database.MigrateAsync();
+            }
             var row = await db.Settings.AsNoTracking().SingleOrDefaultAsync();
             var data = row == null ? new AppData() : JsonSerializer.Deserialize<AppData>(row.Json, Json) ?? throw new InvalidDataException("Einstellungen konnten nicht gelesen werden.");
             if (data.SchemaVersion != 1) throw new InvalidDataException("Unbekannte Datenbankversion. Bitte eine passende App-Version verwenden.");
@@ -31,10 +43,10 @@ public sealed class Store(string directory)
         if (d.SchemaVersion != 1) throw new InvalidDataException("Nicht unterstützte Exportversion.");
         foreach (var t in d.Tasks) t.Validate();
         void Unique(IEnumerable<Guid> ids) { var a = ids.ToArray(); if (a.Distinct().Count() != a.Length) throw new InvalidDataException("Doppelte IDs im Import."); }
-        Unique(d.Tasks.Select(t=>t.Id)); Unique(d.Projects.Select(t=>t.Id)); Unique(d.Blocks.Select(t=>t.Id)); Unique(d.Sessions.Select(t=>t.Id)); Unique(d.Workspaces.Select(t=>t.Id)); Unique(d.Reviews.Select(t=>t.Id));
-        var taskIds = d.Tasks.Select(t=>t.Id).ToHashSet(); var projectIds = d.Projects.Select(t=>t.Id).ToHashSet();
-        if (d.Tasks.Any(t=>t.ProjectId.HasValue && !projectIds.Contains(t.ProjectId.Value)) || d.Tasks.Any(t=>t.Dependencies.Any(id=>!taskIds.Contains(id)))) throw new InvalidDataException("Ungültige Projekt- oder Aufgabenverknüpfung.");
-        if (d.Blocks.Any(b=>b.End <= b.Start || b.TaskId.HasValue && !taskIds.Contains(b.TaskId.Value)) || d.Sessions.Any(s=>s.Minutes < 0 || s.TaskId.HasValue && !taskIds.Contains(s.TaskId.Value))) throw new InvalidDataException("Ungültiger Kalender- oder Fokuseintrag.");
+        Unique(d.Tasks.Select(t => t.Id)); Unique(d.Projects.Select(t => t.Id)); Unique(d.Blocks.Select(t => t.Id)); Unique(d.Sessions.Select(t => t.Id)); Unique(d.Workspaces.Select(t => t.Id)); Unique(d.Reviews.Select(t => t.Id));
+        var taskIds = d.Tasks.Select(t => t.Id).ToHashSet(); var projectIds = d.Projects.Select(t => t.Id).ToHashSet();
+        if (d.Tasks.Any(t => t.ProjectId.HasValue && !projectIds.Contains(t.ProjectId.Value)) || d.Tasks.Any(t => t.Dependencies.Any(id => !taskIds.Contains(id)))) throw new InvalidDataException("Ungültige Projekt- oder Aufgabenverknüpfung.");
+        if (d.Blocks.Any(b => b.End <= b.Start || b.TaskId.HasValue && !taskIds.Contains(b.TaskId.Value)) || d.Sessions.Any(s => s.Minutes < 0 || s.TaskId.HasValue && !taskIds.Contains(s.TaskId.Value))) throw new InvalidDataException("Ungültiger Kalender- oder Fokuseintrag.");
         if (d.Settings.WorkStart is < 0 or > 23 || d.Settings.WorkEnd <= d.Settings.WorkStart || d.Settings.WorkEnd > 24 || d.Settings.FocusMinutes is < 1 or > 1440 || d.Settings.ShortBreak < 1 || d.Settings.LongBreak < 1 || d.Settings.SessionsBeforeLongBreak < 1) throw new InvalidDataException("Ungültige Einstellungen.");
     }
     public async Task SaveAsync(AppData data)

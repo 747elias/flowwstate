@@ -10,7 +10,7 @@ public static class Scheduler
     {
         var result = new List<TimeWindow>();
         var ordered = windows.OrderBy(w => w.Start).ToList();
-        for (int i=1;i<ordered.Count;i++) if(ordered[i-1].End>ordered[i].Start) throw new ArgumentException("Verfügbarkeiten dürfen nicht überlappen.");
+        for (int i = 1; i < ordered.Count; i++) if (ordered[i - 1].End > ordered[i].Start) throw new ArgumentException("Verfügbarkeiten dürfen nicht überlappen.");
         foreach (var w in ordered)
         {
             if (w.End <= w.Start) throw new ArgumentException("Das Ende muss nach dem Beginn liegen.");
@@ -46,7 +46,7 @@ public static class Scheduler
                     t.Dependencies.All(finished.ContainsKey))
                     .Select(t => new { Task = t, Start = new[] { cursor, t.NotBefore ?? cursor, t.Dependencies.Select(id => finished[id]).DefaultIfEmpty(cursor).Max() }.Max() })
                     .Where(x => x.Start < slot.End && (slot.End - x.Start).TotalMinutes >= (x.Task.Splittable ? Math.Min(remaining[x.Task.Id], x.Task.MinimumMinutes) : remaining[x.Task.Id]))
-                    .Where(x => !x.Task.Splittable || remaining[x.Task.Id] <= (slot.End-x.Start).TotalMinutes || remaining[x.Task.Id] >= x.Task.MinimumMinutes * 2)
+                    .Where(x => !x.Task.Splittable || remaining[x.Task.Id] <= (slot.End - x.Start).TotalMinutes || remaining[x.Task.Id] >= x.Task.MinimumMinutes * 2)
                     .OrderBy(x => x.Start).ThenByDescending(x => Score(x.Task, x.Start, previousProject)).ThenBy(x => x.Task.Created).ThenBy(x => x.Task.Id).ToList();
                 if (candidates.Count == 0) break;
                 var chosen = candidates[0]; var task = chosen.Task; cursor = chosen.Start;
@@ -56,8 +56,16 @@ public static class Scheduler
                 if (remaining[task.Id] > amount && remaining[task.Id] - amount < task.MinimumMinutes) amount = remaining[task.Id] - task.MinimumMinutes;
                 if (amount < Math.Min(task.MinimumMinutes, remaining[task.Id])) break;
                 var end = cursor.AddMinutes(amount);
-                blocks.Add(new() { TaskId = task.Id, Title = task.Title, Start = cursor, End = end, Kind = BlockKind.AutoPlan, PlanId = planId,
-                    Reason = $"Priorität {task.Priority} · {amount} Min." + (task.Due is {} d ? $" · Fällig {d.ToLocalTime():dd.MM. HH:mm}" : "") + (task.Due < end ? " · Achtung: nach Fälligkeit" : "") });
+                blocks.Add(new()
+                {
+                    TaskId = task.Id,
+                    Title = task.Title,
+                    Start = cursor,
+                    End = end,
+                    Kind = BlockKind.AutoPlan,
+                    PlanId = planId,
+                    Reason = $"Priorität {task.Priority} · {amount} Min." + (task.Due is { } d ? $" · Fällig {d.ToLocalTime():dd.MM. HH:mm}" : "") + (task.Due < end ? " · Achtung: nach Fälligkeit" : "")
+                });
                 remaining[task.Id] -= amount; if (remaining[task.Id] == 0) finished[task.Id] = end;
                 previousProject = task.ProjectId; cursor = end;
                 var pause = options.BreakMinutes + options.BufferMinutes;
@@ -74,7 +82,7 @@ public static class Scheduler
         return new(blocks, unplanned);
     }
     static double Score(TaskItem t, DateTimeOffset start, Guid? project) => (4 - (int)t.Priority) * 100 +
-        (t.Due is {} due ? Math.Clamp(200 - (due - start).TotalHours * 3, -100, 400) : 0) +
+        (t.Due is { } due ? Math.Clamp(200 - (due - start).TotalHours * 3, -100, 400) : 0) +
         (t.Status == TaskStatus.InProgress ? 35 : 0) + (project.HasValue && t.ProjectId == project ? 15 : 0);
 
     public static TimeWindow LocalWindow(DateOnly day, TimeOnly start, TimeOnly end, TimeZoneInfo zone)

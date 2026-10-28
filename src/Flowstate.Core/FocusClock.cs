@@ -12,7 +12,7 @@ public class FocusClock
     public bool IsBreak { get; set; }
     public bool Stopwatch { get; set; }
     public bool Running => RunningSince != null;
-    public double Elapsed(DateTimeOffset now) => AccumulatedSeconds + (RunningSince is {} start ? Math.Max(0, (now - start).TotalSeconds) : 0);
+    public double Elapsed(DateTimeOffset now) => AccumulatedSeconds + (RunningSince is { } start ? Math.Max(0, (now - start).TotalSeconds) : 0);
     public double Remaining(DateTimeOffset now) => Math.Max(0, TargetSeconds - Elapsed(now));
     public void Start(DateTimeOffset now) { if (!Running) RunningSince = now; if (Created == default) Created = now; }
     public void Pause(DateTimeOffset now) { AccumulatedSeconds = Elapsed(now); RunningSince = null; }
